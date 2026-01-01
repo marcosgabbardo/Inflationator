@@ -29,6 +29,12 @@ from src.economy.labor_market import LaborMarket
 from src.economy.austrian.business_cycle import BusinessCycle, CyclePhase
 from src.data.collectors.bitcoin import BitcoinCollector
 from src.data.collectors.commodities import CommoditiesCollector
+from src.data.real_world_conditions import (
+    RealWorldConditionsCollector,
+    RealWorldInitializer,
+    EconomicConditions,
+    print_conditions_summary,
+)
 
 
 class SimulationState(str, Enum):
@@ -44,7 +50,7 @@ class SimulationState(str, Enum):
 class SimulationMetrics:
     """Key metrics tracked during simulation"""
     tick: int = 0
-    real_time_weeks: int = 0
+    real_time_months: int = 0  # Changed from weeks to months
 
     # Economic indicators (our calculation, not government's)
     inflation_rate: float = 0.0
@@ -68,7 +74,7 @@ class SimulationMetrics:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tick": self.tick,
-            "real_time_weeks": self.real_time_weeks,
+            "real_time_months": self.real_time_months,
             "inflation_rate": self.inflation_rate,
             "money_supply": str(self.money_supply),
             "credit_expansion": str(self.credit_expansion),
@@ -92,7 +98,7 @@ class SimulationConfig:
     num_banks: int = 500
     regime_type: RegimeType = RegimeType.DEMOCRACY_LIBERAL
     central_bank_intervention: float = 0.5
-    ticks_per_run: int = 52  # 1 year by default
+    ticks_per_run: int = 12  # 1 year by default (12 months instead of 52 weeks)
     use_real_data: bool = True
 
 
@@ -139,6 +145,11 @@ class SimulationEngine:
         self.external_data: Dict[str, Any] = {}
         self.bitcoin_collector = BitcoinCollector() if self.config.use_real_data else None
         self.commodities_collector = CommoditiesCollector() if self.config.use_real_data else None
+
+        # Real-world conditions (comprehensive economic state)
+        self.real_conditions: Optional[EconomicConditions] = None
+        self.conditions_collector = RealWorldConditionsCollector(self.config.country) if self.config.use_real_data else None
+        self.real_world_initializer: Optional[RealWorldInitializer] = None
 
     # ===========================================
     # INITIALIZATION
@@ -219,50 +230,197 @@ class SimulationEngine:
 
     def _fetch_real_data(self):
         """
-        Fetch real-world price data from APIs.
+        Fetch comprehensive real-world economic conditions from APIs.
 
-        Updates Bitcoin, Gold, and commodity markets with real prices.
-        Only called if use_real_data is True.
+        Updates:
+        - Bitcoin, Gold, commodities with real prices
+        - Market sentiment and fear levels
+        - Interest rates and yield curve
+        - Dollar strength and volatility
+
+        Austrian Theory:
+        - Initial conditions must reflect TODAY's actual economy
+        - Market prices contain distributed information (Hayek)
+        - Government statistics lie; use market data instead
         """
         if not self.config.use_real_data:
             return
 
+        def _set_market_price(market, price):
+            """Helper to set price without creating artificial change."""
+            if market and price:
+                market.current_price = price
+                market.previous_price = price  # No initial jump
+                market.price_history = [price]  # Fresh history
+
         try:
-            # Fetch Bitcoin price
+            # Fetch comprehensive real-world conditions
+            if self.conditions_collector:
+                print("Fetching comprehensive real-world conditions...")
+                self.real_conditions = asyncio.run(
+                    self.conditions_collector.fetch_all_conditions()
+                )
+
+                # Create initializer for agent behavior
+                self.real_world_initializer = RealWorldInitializer(
+                    self.real_conditions, self.config.country
+                )
+
+                # Set market prices from conditions
+                btc_market = self.market_manager.get_market_by_name("Bitcoin")
+                _set_market_price(btc_market, self.real_conditions.btc_price_usd)
+                self.external_data["bitcoin_usd"] = self.real_conditions.btc_price_usd
+
+                gold_market = self.market_manager.get_market_by_name("Gold (oz)")
+                _set_market_price(gold_market, self.real_conditions.gold_price_usd)
+                self.external_data["gold_usd"] = self.real_conditions.gold_price_usd
+
+                silver_market = self.market_manager.get_market_by_name("Silver (oz)")
+                _set_market_price(silver_market, self.real_conditions.silver_price_usd)
+
+                oil_market = self.market_manager.get_market_by_name("Oil (barrel)")
+                _set_market_price(oil_market, self.real_conditions.oil_price_usd)
+
+                # Store all conditions for reference
+                self.external_data["real_conditions"] = {
+                    "btc_price": float(self.real_conditions.btc_price_usd),
+                    "gold_price": float(self.real_conditions.gold_price_usd),
+                    "sp500": self.real_conditions.sp500_value,
+                    "vix": self.real_conditions.vix_value,
+                    "dxy": self.real_conditions.dxy_value,
+                    "treasury_10y": self.real_conditions.treasury_10y,
+                    "yield_inverted": self.real_conditions.yield_curve_inverted,
+                    "fear_level": self.real_conditions.market_fear_level,
+                    "sentiment": self.real_conditions.market_sentiment,
+                    "inflation_estimate": self.real_conditions.inflation_estimate,
+                    "recession_prob": self.real_conditions.recession_probability,
+                    "geopolitical_risk": self.real_conditions.geopolitical_risk_level,
+                }
+
+                # Print summary
+                print_conditions_summary(self.real_conditions)
+
+                # Apply conditions to central bank
+                if self.central_bank:
+                    self._apply_conditions_to_central_bank()
+
+                # Apply conditions to agents (time preference, risk tolerance)
+                self._apply_conditions_to_agents()
+
+                print(f"  Real BTC price: ${self.real_conditions.btc_price_usd:,.0f}")
+
+        except Exception as e:
+            print(f"  Warning: Could not fetch real data: {e}")
+            # Fallback to basic data fetch
+            self._fetch_basic_real_data()
+
+    def _fetch_basic_real_data(self):
+        """Fallback: fetch basic price data if comprehensive fetch fails."""
+        def _set_market_price(market, price):
+            if market and price:
+                market.current_price = price
+                market.previous_price = price
+                market.price_history = [price]
+
+        try:
             if self.bitcoin_collector:
                 btc_prices = asyncio.run(self.bitcoin_collector.get_current_price())
                 if "usd" in btc_prices:
                     btc_market = self.market_manager.get_market_by_name("Bitcoin")
-                    if btc_market:
-                        btc_market.current_price = btc_prices["usd"]
-                        self.external_data["bitcoin_usd"] = btc_prices["usd"]
-                        print(f"  Real BTC price: ${btc_prices['usd']:,.0f}")
+                    _set_market_price(btc_market, btc_prices["usd"])
+                    self.external_data["bitcoin_usd"] = btc_prices["usd"]
+                    print(f"  Real BTC price: ${btc_prices['usd']:,.0f}")
 
-            # Fetch commodity prices
             if self.commodities_collector:
                 comm_prices = self.commodities_collector.get_current_prices()
-
-                # Update Gold market
                 if "gold" in comm_prices:
                     gold_market = self.market_manager.get_market_by_name("Gold (oz)")
-                    if gold_market:
-                        gold_market.current_price = comm_prices["gold"]
-                        self.external_data["gold_usd"] = comm_prices["gold"]
-
-                # Update Silver market
+                    _set_market_price(gold_market, comm_prices["gold"])
                 if "silver" in comm_prices:
                     silver_market = self.market_manager.get_market_by_name("Silver (oz)")
-                    if silver_market:
-                        silver_market.current_price = comm_prices["silver"]
-
-                # Update Oil market
+                    _set_market_price(silver_market, comm_prices["silver"])
                 if "oil" in comm_prices:
                     oil_market = self.market_manager.get_market_by_name("Oil (barrel)")
-                    if oil_market:
-                        oil_market.current_price = comm_prices["oil"]
-
+                    _set_market_price(oil_market, comm_prices["oil"])
         except Exception as e:
-            print(f"  Warning: Could not fetch real data: {e}")
+            print(f"  Warning: Fallback data fetch also failed: {e}")
+
+    def _apply_conditions_to_central_bank(self):
+        """
+        Apply real-world conditions to central bank initial state.
+
+        Uses market-derived interest rates instead of defaults.
+        """
+        if not self.real_conditions or not self.central_bank:
+            return
+
+        # Set policy rate based on market rates (not CB's fake target)
+        # Use 2Y treasury as proxy for short-term rates
+        market_rate = self.real_conditions.treasury_2y / 100
+        self.central_bank.policy_rate = market_rate
+
+        # Set inflation target (CB's stated goal, not reality)
+        self.central_bank.inflation_target = 0.02  # Always claims 2%
+
+        # Determine if QE/QT active based on conditions
+        if self.real_conditions.monetary_expansion_signal == "loose":
+            self.central_bank.start_qe(monthly_amount=Decimal("50000000000"))  # $50B/month
+        elif self.real_conditions.monetary_expansion_signal == "tight":
+            self.central_bank.start_qt(monthly_reduction=Decimal("30000000000"))  # $30B/month
+
+    def _apply_conditions_to_agents(self):
+        """
+        Apply real-world conditions to agents' initial behavior.
+
+        Austrian Theory:
+        - Fear increases time preference (want things NOW)
+        - High inflation expectations increase time preference
+        - Market conditions affect risk tolerance
+        """
+        if not self.real_conditions:
+            return
+
+        # Calculate shifts from conditions collector
+        collector = self.conditions_collector
+        sim_config = collector.to_simulation_config(self.real_conditions)
+        agent_modifiers = sim_config.get("agent_modifiers", {})
+
+        fear_shift = agent_modifiers.get("fear_level", 0.5)
+        time_pref_shift = agent_modifiers.get("time_preference_shift", 0)
+        risk_shift = agent_modifiers.get("risk_tolerance_shift", 0)
+        inflation_exp = agent_modifiers.get("inflation_expectations", 0.03)
+
+        # Apply to persons
+        for person in self.persons:
+            # Shift time preference based on conditions
+            person.time_preference = max(0.1, min(0.9,
+                person.time_preference + time_pref_shift
+            ))
+
+            # Shift risk tolerance
+            person.risk_tolerance = max(0.1, min(0.9,
+                person.risk_tolerance + risk_shift
+            ))
+
+            # Set inflation expectations
+            person.inflation_expectation = inflation_exp
+
+        # Apply to companies
+        for company in self.companies:
+            # Companies also affected by conditions
+            company.time_preference = max(0.1, min(0.9,
+                company.time_preference + time_pref_shift * 0.5  # Less reactive
+            ))
+
+        # Update employment rate based on conditions
+        if self.real_world_initializer:
+            target_employment = self.real_world_initializer.get_employment_rate()
+            current_employed = sum(1 for p in self.persons if p.employed)
+            current_rate = current_employed / len(self.persons)
+
+            # Adjust if significantly different
+            if abs(current_rate - target_employment) > 0.05:
+                print(f"  Adjusting employment: {current_rate:.1%} -> {target_employment:.1%}")
 
     def _initialize_labor_market(self):
         """
@@ -321,12 +479,12 @@ class SimulationEngine:
         """
         Run the simulation for specified ticks.
 
-        Each tick represents 1 week of economic activity.
+        Each tick represents 1 month of economic activity.
         """
         ticks = ticks or self.config.ticks_per_run
         self.state = SimulationState.RUNNING
 
-        print(f"\nRunning simulation for {ticks} weeks...")
+        print(f"\nRunning simulation for {ticks} months...")
 
         for _ in range(ticks):
             if self.state != SimulationState.RUNNING:
@@ -344,50 +502,78 @@ class SimulationEngine:
 
     def _run_tick(self):
         """Execute one simulation tick"""
-        # Fetch real data periodically (every 10 ticks to avoid rate limiting)
-        if self.current_tick % 10 == 0 and self.config.use_real_data:
-            self._fetch_real_data()
+        # Note: Real data is only fetched at initialization, not during simulation
+        # This allows the simulation to evolve prices naturally based on:
+        # - Supply/demand dynamics
+        # - Monetary effects (Central Bank money printing)
+        # - Business cycle phases
+        # - Tariff effects (Government trade policy)
+        # - Political business cycle (election year easing)
+        # Real-world prices serve as initial anchor, not continuous override
 
         # Build world state for agents
         world_state = self._build_world_state()
 
-        # 1. Central Bank actions (monetary distortions)
-        if self.central_bank:
-            cb_actions = self.central_bank.step(world_state)
-
-        # 2. Government actions (fiscal distortions)
+        # 1. Government actions (fiscal distortions) - FIRST to get election easing
         if self.government:
             gov_actions = self.government.step(world_state)
+
+            # Check for political pressure on Central Bank (election year)
+            cb_pressure = self.government.pressure_central_bank(
+                self.central_bank, world_state
+            )
+            if cb_pressure:
+                world_state["political_pressure"] = cb_pressure
+
+        # 2. Central Bank actions (monetary distortions)
+        if self.central_bank:
+            # Apply political pressure if election year
+            if world_state.get("political_pressure"):
+                pressure_level = world_state["political_pressure"]["pressure_level"]
+                # CB succumbs to pressure - lowers rates more than needed
+                # Austrian view: This is why CB "independence" is a myth
+                self.central_bank.state.rate_cuts_cumulative += pressure_level * 0.002
+
+            cb_actions = self.central_bank.step(world_state)
 
         # 3. Banks process (credit creation)
         for bank in self.banks:
             bank.step(world_state)
 
-        # 4. Companies produce and submit sell orders
+        # 4. Apply monetary effects to prices (Austrian: inflation is monetary)
+        self._apply_monetary_effects()
+
+        # 5. Apply tariff effects to prices (Government trade policy)
+        self._apply_tariff_effects()
+
+        # 6. Companies produce and submit sell orders
         self._process_company_orders(world_state)
 
-        # 5. Persons consume, save, invest - submit buy orders
+        # 7. Persons consume, save, invest - submit buy orders
         self._process_person_orders(world_state)
 
-        # 6. Labor market dynamics
+        # 8. Labor market dynamics
         self._process_labor_market()
 
-        # 7. Credit system - loans and deposits
+        # 9. Credit system - loans and deposits
         self._process_credit_system(world_state)
 
-        # 8. Clear all markets and discover prices
+        # 10. Clear all markets and discover prices
         trades = self.market_manager.clear_all_markets(self.current_tick)
 
-        # 9. Update Austrian Business Cycle
+        # 11. Clear order books for next tick (fresh orders each month)
+        self._clear_order_books()
+
+        # 12. Update Austrian Business Cycle
         self._update_business_cycle(world_state)
 
-        # 10. Update metrics
+        # 13. Update metrics
         self._update_metrics()
 
         # Store metrics history
         self.metrics_history.append(SimulationMetrics(
             tick=self.metrics.tick,
-            real_time_weeks=self.metrics.real_time_weeks,
+            real_time_months=self.metrics.real_time_months,
             inflation_rate=self.metrics.inflation_rate,
             money_supply=self.metrics.money_supply,
             credit_expansion=self.metrics.credit_expansion,
@@ -407,7 +593,7 @@ class SimulationEngine:
 
         # Progress indicator
         if self.current_tick % 10 == 0:
-            print(f"  Week {self.current_tick}: Inflation={self.metrics.inflation_rate:.2%}, "
+            print(f"  Month {self.current_tick}: Inflation={self.metrics.inflation_rate:.2%}, "
                   f"BTC=${self.metrics.bitcoin_price}")
 
     def _build_world_state(self) -> Dict[str, Any]:
@@ -464,12 +650,15 @@ class SimulationEngine:
         sample_size = min(1000, len(self.companies))
         sampled_companies = random.sample(self.companies, sample_size)
 
+        # Calculate supply pressure (more companies = more supply = lower prices)
+        supply_pressure = len(sampled_companies) / max(1, self.config.num_companies)
+
         for company in sampled_companies:
             # Let company make its decisions
             company.step(world_state)
 
             # Submit sell orders based on production
-            production_value = company.capital_stock * Decimal("0.02")  # Weekly output
+            production_value = company.capital_stock * Decimal("0.08")  # Monthly output (~4x weekly)
 
             if production_value > 0:
                 # Choose market based on production type
@@ -479,13 +668,30 @@ class SimulationEngine:
                     target_markets = capital_markets if capital_markets else consumer_markets
 
                 if target_markets:
-                    # Pick random market (could be more sophisticated)
                     market = random.choice(target_markets)
 
-                    # Calculate quantity and price
+                    # Calculate quantity and price with VARIABILITY
                     quantity = production_value / market.current_price
-                    # Price slightly above current price to make profit
-                    min_price = market.current_price * Decimal("0.95")
+
+                    # Price based on company's situation:
+                    # - Lower margin if high supply pressure
+                    # - Higher margin if company is profitable
+                    # - Random variability for market dynamics
+                    base_margin = 0.95  # Base: sell at 95% of market
+
+                    # Adjust based on supply pressure (more supply = compete harder)
+                    supply_adjustment = -0.05 * supply_pressure  # Up to -5%
+
+                    # Adjust based on company profitability (profitable = less desperate)
+                    profit_adjustment = 0.03 if company.wealth > Decimal("10000") else -0.02
+
+                    # Random variability for realistic market dynamics (smaller for stability)
+                    random_adjustment = random.uniform(-0.03, 0.02)
+
+                    price_factor = base_margin + supply_adjustment + profit_adjustment + random_adjustment
+                    price_factor = max(0.90, min(1.02, price_factor))  # Tighter clamp to 90%-102%
+
+                    min_price = market.current_price * Decimal(str(price_factor))
 
                     if quantity > 0:
                         market.submit_sell_order(
@@ -512,6 +718,12 @@ class SimulationEngine:
         sample_size = min(5000, len(self.persons))
         sampled_persons = random.sample(self.persons, sample_size)
 
+        # Demand pressure (more buyers = higher prices)
+        demand_pressure = len(sampled_persons) / max(1, self.config.num_persons)
+
+        # Inflation expectations affect willingness to pay
+        inflation_expectation = world_state.get("inflation_rate", 0.0)
+
         for person in sampled_persons:
             # Let person make decisions
             person.step(world_state)
@@ -520,18 +732,41 @@ class SimulationEngine:
             if person.wealth <= 0:
                 continue
 
-            # Calculate weekly budget
+            # Calculate monthly budget (4x weekly)
             savings_rate = person.calculate_savings_rate()
-            weekly_income = person.wage if person.employed else person.wealth * Decimal("0.01")
-            consumption_budget = weekly_income * Decimal(str(1 - savings_rate))
-            investment_budget = weekly_income * Decimal(str(savings_rate * 0.3))  # Part of savings goes to assets
+            monthly_income = (person.wage if person.employed else person.wealth * Decimal("0.01")) * Decimal("4")
+            consumption_budget = monthly_income * Decimal(str(1 - savings_rate))
+            investment_budget = monthly_income * Decimal(str(savings_rate * 0.3))  # Part of savings goes to assets
 
-            # Submit buy orders for consumer goods
+            # Submit buy orders for consumer goods with MONTE CARLO VARIABILITY
             if consumption_budget > 0 and consumer_markets:
                 market = random.choice(consumer_markets)
                 quantity = consumption_budget / market.current_price
-                # Willing to pay slightly above current price
-                max_price = market.current_price * Decimal("1.05")
+
+                # Price willingness based on:
+                # - Base: willing to pay above market
+                # - Higher time preference = more willing to pay now
+                # - Higher demand pressure = compete harder
+                # - Higher inflation expectation = buy now before prices rise
+                # - Monte Carlo random variability
+                base_premium = 1.02
+
+                # High time preference = pay more now
+                time_pref_adjustment = person.time_preference * 0.05  # Up to +5%
+
+                # Demand pressure
+                demand_adjustment = demand_pressure * 0.03  # Up to +3%
+
+                # Inflation expectation (Austrian: expect money to lose value)
+                inflation_adjustment = min(0.10, inflation_expectation * 0.5)  # Up to +10%
+
+                # Monte Carlo random variability (smaller for stability)
+                random_adjustment = random.gauss(0, 0.015)  # Normal distribution, σ=1.5%
+
+                price_factor = base_premium + time_pref_adjustment + demand_adjustment + inflation_adjustment + random_adjustment
+                price_factor = max(0.98, min(1.08, price_factor))  # Tighter clamp 98%-108%
+
+                max_price = market.current_price * Decimal(str(price_factor))
 
                 if quantity > 0:
                     market.submit_buy_order(
@@ -544,9 +779,19 @@ class SimulationEngine:
             # Investment in Bitcoin (based on risk tolerance and inflation expectations)
             if investment_budget > 0 and bitcoin_market:
                 btc_allocation = person.risk_tolerance * float(investment_budget) * 0.5
+
+                # Higher allocation if expecting inflation (Bitcoin as hedge)
+                if inflation_expectation > 0.05:
+                    btc_allocation *= (1 + inflation_expectation)
+
                 if btc_allocation > 100:  # Minimum investment
                     quantity = Decimal(str(btc_allocation)) / bitcoin_market.current_price
-                    max_price = bitcoin_market.current_price * Decimal("1.02")
+
+                    # Monte Carlo for BTC price willingness
+                    # Crypto buyers more volatile but still reasonable
+                    btc_premium = 1.01 + random.gauss(0, 0.03)  # Moderate volatility
+                    btc_premium = max(0.95, min(1.10, btc_premium))
+                    max_price = bitcoin_market.current_price * Decimal(str(btc_premium))
 
                     bitcoin_market.submit_buy_order(
                         agent_id=person.id,
@@ -558,9 +803,19 @@ class SimulationEngine:
             # Investment in Gold (more conservative)
             if investment_budget > 0 and gold_market:
                 gold_allocation = (1 - person.risk_tolerance) * float(investment_budget) * 0.3
+
+                # Higher allocation if expecting inflation (Gold as hedge)
+                if inflation_expectation > 0.05:
+                    gold_allocation *= (1 + inflation_expectation * 0.5)
+
                 if gold_allocation > 50:  # Minimum investment
                     quantity = Decimal(str(gold_allocation)) / gold_market.current_price
-                    max_price = gold_market.current_price * Decimal("1.01")
+
+                    # Monte Carlo for Gold price willingness
+                    # Gold buyers more conservative
+                    gold_premium = 1.005 + random.gauss(0, 0.01)  # Very low volatility
+                    gold_premium = max(0.99, min(1.03, gold_premium))
+                    max_price = gold_market.current_price * Decimal(str(gold_premium))
 
                     gold_market.submit_buy_order(
                         agent_id=person.id,
@@ -679,7 +934,7 @@ class SimulationEngine:
                             if bank.make_loan(
                                 company.id,
                                 loan_amount,
-                                term_weeks=52,  # 1 year loan
+                                term_months=12,  # 1 year loan
                                 collateral=company.capital_stock
                             ):
                                 # Company receives funds
@@ -704,6 +959,189 @@ class SimulationEngine:
                 # This could trigger business cycle effects
                 if self.central_bank:
                     self.central_bank.state.malinvestment_induced += total_credit * Decimal("0.01")
+
+    def _apply_monetary_effects(self):
+        """
+        Apply monetary effects to all prices based on CB policy.
+
+        Austrian Theory (Mises, Hayek):
+        - Inflation is ALWAYS a monetary phenomenon
+        - More money chasing same goods = higher prices
+        - New money enters economy unevenly (Cantillon effect)
+        - Central bank money printing is the root cause of inflation
+
+        Key insight for simulation:
+        - During QE: BTC/Gold appreciate as people flee fiat
+        - During QT: BTC/Gold stabilize, consumer prices drop
+        - The "controlled" inflation is the illusion
+        """
+        if not self.central_bank:
+            return
+
+        # Calculate money supply growth rate
+        current_money = self.central_bank.state.base_money
+        previous_money = getattr(self, '_previous_money_supply', current_money)
+
+        if previous_money > 0:
+            money_growth_rate = float((current_money - previous_money) / previous_money)
+        else:
+            money_growth_rate = 0.0
+
+        self._previous_money_supply = current_money
+
+        # Get current monetary policy stance
+        policy = self.central_bank.current_policy
+        qe_active = self.central_bank.qe_active
+        qt_active = self.central_bank.qt_active
+
+        # ===========================================
+        # DIFFERENT EFFECTS BY POLICY STANCE
+        # ===========================================
+        # Tuned for realistic inflation dynamics (MONTHLY):
+        # - Annual inflation target: 2-3%
+        # - Monthly equivalent: ~0.17-0.25% base (2-3% / 12)
+        # - QE effects are gradual, not immediate
+        # - Hard assets (BTC, Gold) react more, but still realistic
+
+        # Dampen money growth rate to monthly equivalent
+        # CB prints money gradually, not all at once
+        # For realistic inflation: 2-5% annual = 0.17-0.42% monthly
+        monthly_money_effect = money_growth_rate * 0.08  # 8% of growth affects prices per month
+
+        for market in self.market_manager.markets.values():
+            old_price = market.current_price
+            market.previous_price = old_price
+
+            # Base price change from money supply
+            if monthly_money_effect > 0:
+                # EXPANSION: Prices rise (but controlled by CB)
+                # Consumer goods: dampened effect (the "controlled" inflation)
+                # Hard assets: amplified effect (people flee to safety)
+
+                if market.market_type == MarketType.CRYPTO:
+                    # Bitcoin: LOVES QE - people flee fiat
+                    # Realistic: ~30-50% annual appreciation during heavy QE
+                    if qe_active:
+                        # During QE, BTC outperforms but moderately
+                        btc_multiplier = 1.2 + random.gauss(0, 0.2)  # 1.2x base + volatility
+                        price_factor = Decimal(str(1 + monthly_money_effect * btc_multiplier))
+                    else:
+                        price_factor = Decimal(str(1 + monthly_money_effect * 0.5))
+
+                elif market.market_type == MarketType.COMMODITIES:
+                    # Gold/Silver: Also benefit from QE (traditional safe haven)
+                    # Realistic: ~10-20% annual appreciation during QE
+                    if qe_active:
+                        gold_multiplier = 0.8 + random.gauss(0, 0.1)
+                        price_factor = Decimal(str(1 + monthly_money_effect * gold_multiplier))
+                    else:
+                        price_factor = Decimal(str(1 + monthly_money_effect * 0.4))
+
+                else:
+                    # Consumer goods: CB tries to control this (the "2% target")
+                    # Dampened pass-through to maintain the illusion
+                    damping = 0.2 if qt_active else 0.4
+                    price_factor = Decimal(str(1 + monthly_money_effect * damping))
+
+                # Monte Carlo variability (smaller for stability)
+                price_factor *= Decimal(str(random.uniform(0.995, 1.005)))
+
+            elif monthly_money_effect < 0:
+                # CONTRACTION (QT): Prices should fall, but...
+                # Consumer goods: sticky downward (wages don't fall)
+                # Hard assets: can fall during QT
+
+                if market.market_type == MarketType.CRYPTO:
+                    # BTC can be volatile during QT
+                    btc_factor = 1 + monthly_money_effect * 1.5 + random.gauss(0, 0.01)
+                    price_factor = Decimal(str(max(0.95, btc_factor)))
+
+                elif market.market_type == MarketType.COMMODITIES:
+                    # Gold more stable during QT
+                    gold_factor = 1 + monthly_money_effect * 0.5
+                    price_factor = Decimal(str(max(0.98, gold_factor)))
+
+                else:
+                    # Consumer goods: sticky - don't fall much
+                    # This is why QT "works" to control measured inflation
+                    price_factor = Decimal(str(max(0.995, 1 + monthly_money_effect * 0.1)))
+
+            else:
+                # Neutral: small random walk
+                price_factor = Decimal(str(1 + random.gauss(0, 0.001)))
+
+            # Apply price change
+            market.current_price = old_price * price_factor
+
+            # Track in history
+            market.price_history.append(market.current_price)
+            if len(market.price_history) > 1000:
+                market.price_history.pop(0)
+
+    def _apply_tariff_effects(self):
+        """
+        Apply government tariff effects to prices.
+
+        Austrian/Free Trade Theory:
+        - Tariffs are taxes on consumers (not foreign producers)
+        - Raise prices of imported goods
+        - Cause supply chain disruptions
+        - Invite retaliation (trade wars)
+        - Protect inefficient domestic producers at consumer expense
+
+        Current example: Trump tariffs raising prices on consumer goods
+        """
+        if not self.government:
+            return
+
+        # Skip if no significant tariffs
+        if self.government.tariff_rate < 0.01:
+            return
+
+        # Get tariff price impact multipliers
+        tariff_impacts = self.government.calculate_tariff_price_impact()
+
+        for market in self.market_manager.markets.values():
+            # Determine which category this market falls into
+            if market.market_type == MarketType.CONSUMER_GOODS:
+                impact_multiplier = tariff_impacts.get("consumer_goods", 1.0)
+            elif market.market_type == MarketType.CAPITAL_GOODS:
+                impact_multiplier = tariff_impacts.get("capital_goods", 1.0)
+            elif market.market_type == MarketType.COMMODITIES:
+                impact_multiplier = tariff_impacts.get("commodities", 1.0)
+            elif market.market_type == MarketType.CRYPTO:
+                # Crypto unaffected by tariffs (stateless money)
+                impact_multiplier = 1.0
+            else:
+                impact_multiplier = 1.0
+
+            # Apply tariff effect if significant
+            if impact_multiplier > 1.001:
+                old_price = market.current_price
+
+                # Tariff effect is gradual (pass-through takes time)
+                # Each tick applies a portion of the tariff impact
+                monthly_impact = 1 + (impact_multiplier - 1) * 0.3  # 30% pass-through per month (~10%/week * 4)
+
+                # Add some randomness for realistic market dynamics
+                monthly_impact *= random.uniform(0.98, 1.02)
+
+                market.current_price = old_price * Decimal(str(monthly_impact))
+
+                # Track trade disruption damage
+                if impact_multiplier > 1.05:  # Significant tariff
+                    disruption = (market.current_price - old_price) * market.volume
+                    self.government.state.trade_disruption += disruption
+
+    def _clear_order_books(self):
+        """
+        Clear all order books for the next tick.
+
+        Each tick represents a new trading month with fresh orders.
+        Stale orders don't carry over.
+        """
+        for market in self.market_manager.markets.values():
+            market.order_book.clear()
 
     def _update_business_cycle(self, world_state: Dict[str, Any]):
         """
@@ -802,7 +1240,7 @@ class SimulationEngine:
     def _update_metrics(self):
         """Update simulation metrics"""
         self.metrics.tick = self.current_tick
-        self.metrics.real_time_weeks = self.current_tick
+        self.metrics.real_time_months = self.current_tick
 
         # Calculate inflation from market prices
         self.metrics.inflation_rate = self.market_manager.get_inflation_index()
@@ -836,11 +1274,10 @@ class SimulationEngine:
             self.metrics.total_malinvestment = self.central_bank.state.malinvestment_induced
 
         if self.government:
-            self.metrics.government_damage = (
-                self.government.state.deadweight_loss +
-                self.government.state.compliance_costs +
-                self.government.state.capital_destroyed
-            )
+            # Use total_damage_caused which includes ALL damage types:
+            # deadweight_loss, compliance_costs, capital_destroyed,
+            # trade_disruption, and spending_waste
+            self.metrics.government_damage = self.government.total_damage_caused
             self.metrics.freedom_index = self.government.freedom_index
 
     # ===========================================
@@ -924,6 +1361,42 @@ class SimulationEngine:
             if self.government:
                 self.government.change_regime(RegimeType.ANCAP)
             print("Scenario: Zero intervention (Austrian ideal)")
+
+        elif scenario_name == "trade_war":
+            # Simulate trade war (like US-China or Trump tariffs)
+            tariff_rate = parameters.get("tariff_rate", 0.25)  # 25% default
+            if self.government:
+                self.government.initiate_trade_war(target_rate=tariff_rate)
+                print(f"Scenario: Trade War initiated with {tariff_rate:.0%} tariffs")
+
+        elif scenario_name == "trump_tariffs":
+            # Simulate current Trump tariff policy (2025+)
+            if self.government:
+                # General tariffs on imports
+                self.government.set_tariff_rate(0.20, mode="protectionist")
+                # Sector-specific tariffs
+                self.government.set_sector_tariff("electronics", 0.35)
+                self.government.set_sector_tariff("steel", 0.50)
+                self.government.set_sector_tariff("automotive", 0.25)
+                print("Scenario: Trump-style tariffs activated")
+                print(f"  - General: 20%, Electronics: 35%, Steel: 50%, Auto: 25%")
+
+        elif scenario_name == "election_year":
+            # Force election year dynamics
+            if self.government:
+                self.government.current_year_in_cycle = 3.5  # 6 months before election
+                self.government.is_election_year = True
+                self.government.election_easing_active = True
+                print("Scenario: Election year activated - expect fiscal easing")
+
+        elif scenario_name == "hyperinflation":
+            # Central bank prints massively
+            if self.central_bank:
+                current_base = self.central_bank.state.base_money
+                # Print 10x the money supply
+                for _ in range(10):
+                    self.central_bank.print_money(current_base)
+                print(f"Scenario: Hyperinflation - money supply increased 10x")
 
     def get_damage_summary(self) -> Dict[str, Any]:
         """Get summary of all damage caused by interventions"""

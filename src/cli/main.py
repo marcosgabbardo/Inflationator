@@ -22,6 +22,10 @@ from src.simulation.engine import SimulationEngine, SimulationConfig
 from src.agents.government import RegimeType
 from src.data.collectors.bitcoin import get_bitcoin_price
 from src.data.collectors.commodities import get_commodity_prices
+from src.data.real_world_conditions import (
+    get_real_world_conditions,
+    print_conditions_summary,
+)
 
 app = typer.Typer(
     name="inflationator",
@@ -44,7 +48,7 @@ class RegimeChoice(str, Enum):
 
 @app.command()
 def run(
-    weeks: int = typer.Option(52, "--weeks", "-w", help="Number of weeks to simulate"),
+    months: int = typer.Option(12, "--months", "-m", help="Number of months to simulate"),
     country: str = typer.Option("USA", "--country", "-c", help="Country code (USA, EUR, etc.)"),
     regime: RegimeChoice = typer.Option(
         RegimeChoice.DEMOCRACY_LIBERAL,
@@ -86,7 +90,7 @@ def run(
         num_companies=companies,
         regime_type=regime_map[regime],
         central_bank_intervention=intervention,
-        ticks_per_run=weeks,
+        ticks_per_run=months,
     )
 
     # Show config
@@ -96,7 +100,7 @@ def run(
     config_table.add_row("Persons", str(persons))
     config_table.add_row("Companies", str(companies))
     config_table.add_row("CB Intervention", f"{intervention:.0%}")
-    config_table.add_row("Duration", f"{weeks} weeks")
+    config_table.add_row("Duration", f"{months} months")
     console.print(config_table)
 
     # Initialize
@@ -112,7 +116,7 @@ def run(
 
     # Run simulation
     console.print("\n[bold]Running simulation...[/bold]")
-    metrics = engine.run(weeks)
+    metrics = engine.run(months)
 
     # Show results
     _display_results(engine)
@@ -172,23 +176,33 @@ def prices():
 @app.command()
 def scenario(
     name: str = typer.Argument(..., help="Scenario name"),
-    weeks: int = typer.Option(52, "--weeks", "-w", help="Weeks to simulate"),
+    months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
+    tariff_rate: float = typer.Option(0.25, "--tariff", "-t", help="Tariff rate for trade war (0-1)"),
 ):
     """
     Run a what-if scenario.
 
     Available scenarios:
+
+    [bold]Monetary Scenarios:[/bold]
     - fed_doubles_money: FED doubles the money supply
-    - ancap_transition: Government becomes anarcho-capitalist
-    - hyperinflation: Extreme money printing
+    - hyperinflation: Extreme money printing (10x)
     - zero_intervention: No CB or government intervention
+
+    [bold]Political Scenarios:[/bold]
+    - ancap_transition: Government becomes anarcho-capitalist
+    - election_year: Simulate election year fiscal easing
+
+    [bold]Trade Scenarios:[/bold]
+    - trade_war: Initiate trade war with tariffs (use --tariff to set rate)
+    - trump_tariffs: Apply Trump-style tariff policy (20% general + sector-specific)
     """
     console.print(Panel.fit(
         f"[bold yellow]SCENARIO: {name.upper()}[/bold yellow]",
         border_style="yellow"
     ))
 
-    config = SimulationConfig(ticks_per_run=weeks)
+    config = SimulationConfig(ticks_per_run=months)
     engine = SimulationEngine(config)
     engine.initialize()
 
@@ -200,16 +214,20 @@ def scenario(
     elif name == "zero_intervention":
         engine.apply_scenario("zero_intervention", {})
     elif name == "hyperinflation":
-        if engine.central_bank:
-            engine.central_bank.intervention_level = 1.0
-            for _ in range(10):
-                engine.central_bank.print_money(engine.central_bank.state.base_money)
+        engine.apply_scenario("hyperinflation", {})
+    elif name == "trade_war":
+        engine.apply_scenario("trade_war", {"tariff_rate": tariff_rate})
+    elif name == "trump_tariffs":
+        engine.apply_scenario("trump_tariffs", {})
+    elif name == "election_year":
+        engine.apply_scenario("election_year", {})
     else:
         console.print(f"[red]Unknown scenario: {name}[/red]")
+        console.print("[dim]Run 'inflationator scenario --help' for available scenarios[/dim]")
         raise typer.Exit(1)
 
     # Run
-    engine.run(weeks)
+    engine.run(months)
     _display_results(engine)
 
 
@@ -217,7 +235,7 @@ def scenario(
 def compare(
     regime1: RegimeChoice = typer.Argument(..., help="First regime"),
     regime2: RegimeChoice = typer.Argument(..., help="Second regime"),
-    weeks: int = typer.Option(52, "--weeks", "-w", help="Weeks to simulate"),
+    months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
 ):
     """
     Compare two different regimes.
@@ -248,11 +266,11 @@ def compare(
             regime_type=regime_map[regime],
             num_persons=5000,  # Smaller for comparison
             num_companies=500,
-            ticks_per_run=weeks,
+            ticks_per_run=months,
         )
         engine = SimulationEngine(config)
         engine.initialize()
-        engine.run(weeks)
+        engine.run(months)
         results.append({
             "regime": regime.value,
             "metrics": engine.metrics,
@@ -297,6 +315,91 @@ def compare(
     # Winner
     winner = regime1 if r1['metrics'].freedom_index > r2['metrics'].freedom_index else regime2
     console.print(f"\n[bold green]Winner: {winner.value}[/bold green] (Higher freedom index)")
+
+
+@app.command()
+def conditions(
+    country: str = typer.Option("USA", "--country", "-c", help="Country code"),
+):
+    """
+    Show current real-world economic conditions.
+
+    Fetches TODAY's economy from private market sources:
+    - Asset prices (BTC, Gold, Oil)
+    - Market indices (S&P 500, VIX)
+    - Interest rates (Treasury yields)
+    - Sentiment indicators
+    - Derived metrics (real inflation, recession probability)
+
+    Austrian Theory: Use market data, not government statistics.
+    """
+    console.print(Panel.fit(
+        f"[bold blue]TODAY'S ECONOMY - {country}[/bold blue]\n"
+        "[dim]Real-time data from private sources[/dim]",
+        border_style="blue"
+    ))
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Fetching real-world conditions...", total=None)
+        try:
+            conditions = get_real_world_conditions(country)
+            progress.update(task, description="[green]Conditions fetched!")
+        except Exception as e:
+            console.print(f"[red]Error fetching conditions: {e}[/red]")
+            raise typer.Exit(1)
+
+    # Print the comprehensive summary
+    print_conditions_summary(conditions)
+
+    # Additional Rich tables for key insights
+    console.print("\n")
+
+    # Investment signals
+    signals_table = Table(title="Investment Signals (Austrian)", show_header=False)
+    signals_table.add_column("Signal", style="cyan")
+    signals_table.add_column("Value", style="green")
+
+    signals_table.add_row(
+        "BTC vs Gold Ratio",
+        f"{float(conditions.btc_price_usd / conditions.gold_price_usd):.1f}x"
+    )
+    signals_table.add_row(
+        "Market Sentiment",
+        conditions.market_sentiment.upper()
+    )
+    signals_table.add_row(
+        "Monetary Policy",
+        conditions.monetary_expansion_signal.upper()
+    )
+
+    if conditions.yield_curve_inverted:
+        signals_table.add_row(
+            "[bold red]WARNING[/bold red]",
+            "Yield curve inverted - recession signal!"
+        )
+
+    console.print(signals_table)
+
+    # Austrian interpretation
+    console.print("\n[bold]Austrian Interpretation:[/bold]")
+    real_inflation = conditions.inflation_estimate
+    if real_inflation > 10:
+        console.print(f"[red]  - Real inflation ({real_inflation:.1f}%) significantly higher than CPI claims[/red]")
+    else:
+        console.print(f"[yellow]  - Real inflation ({real_inflation:.1f}%) - monitor for changes[/yellow]")
+
+    if conditions.dollar_debasement_10y > 100:
+        console.print(f"[red]  - Dollar has lost {conditions.dollar_debasement_10y:.0f}% of purchasing power in 10 years[/red]")
+
+    if conditions.recession_probability > 0.4:
+        console.print(f"[red]  - Recession probability ({conditions.recession_probability:.0%}) is elevated[/red]")
+
+    console.print("\n[dim]'Inflation is always and everywhere a monetary phenomenon.' - Friedman[/dim]")
+    console.print("[dim](But the Austrians knew it first!)[/dim]")
 
 
 @app.command()
@@ -364,7 +467,7 @@ def _display_results(engine: SimulationEngine):
     results_table.add_column("Metric", style="cyan")
     results_table.add_column("Value", style="green")
 
-    results_table.add_row("Duration", f"{metrics['tick']} weeks")
+    results_table.add_row("Duration", f"{metrics['tick']} months")
     results_table.add_row("Inflation Rate", f"{metrics['inflation_rate']:.2%}")
     results_table.add_row("Unemployment", f"{metrics['unemployment_rate']:.2%}")
     results_table.add_row("GDP", f"${float(metrics['gdp']):,.0f}")
@@ -384,6 +487,40 @@ def _display_results(engine: SimulationEngine):
     damage_table.add_row("Total Malinvestment", f"${float(metrics['total_malinvestment']):,.0f}")
     damage_table.add_row("Freedom Index", f"{metrics['freedom_index']:.1f}/100")
     console.print(damage_table)
+
+    # Government Policy Info (tariffs, election cycle)
+    if engine.government:
+        policy_table = Table(title="Government Policy", show_header=False)
+        policy_table.add_column("Policy", style="cyan")
+        policy_table.add_column("Status", style="yellow")
+
+        policy_table.add_row("Regime", engine.government.regime_type.value)
+        policy_table.add_row("Tariff Rate", f"{engine.government.tariff_rate:.1%}")
+        policy_table.add_row("Tariff Mode", engine.government.tariff_mode)
+
+        if engine.government.regime_type.value in ["democracy_liberal", "democracy_socialist"]:
+            cycle_year = engine.government.current_year_in_cycle
+            policy_table.add_row("Election Cycle", f"Year {cycle_year:.1f} of {engine.government.election_cycle_years}")
+            policy_table.add_row("Election Easing", "Yes" if engine.government.election_easing_active else "No")
+
+        if engine.government.state.trade_disruption > 0:
+            policy_table.add_row("Trade Disruption", f"${float(engine.government.state.trade_disruption):,.0f}")
+
+        console.print(policy_table)
+
+    # Business Cycle
+    cycle = summary.get("business_cycle", {})
+    if cycle:
+        cycle_table = Table(title="Business Cycle (Austrian)", show_header=False)
+        cycle_table.add_column("Indicator", style="cyan")
+        cycle_table.add_column("Value", style="magenta")
+
+        cycle_table.add_row("Phase", cycle.get("phase", "unknown"))
+        cycle_table.add_row("Boom Intensity", f"{cycle.get('boom_intensity', 0):.2f}")
+        cycle_table.add_row("Rate Distortion", f"{cycle.get('rate_distortion', 0):.2%}")
+        cycle_table.add_row("Credit Signal", cycle.get("credit_signal", "unknown"))
+        cycle_table.add_row("Investment Signal", cycle.get("investment_signal", "unknown"))
+        console.print(cycle_table)
 
     # Recommendation
     console.print(f"\n[bold]Recommendation:[/bold] {damage['recommendation']}")
