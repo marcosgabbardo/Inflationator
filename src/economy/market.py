@@ -269,12 +269,20 @@ class Market:
         - This is where the "catallactic" process happens
         - Individual valuations aggregate into prices
         - Prices emerge, not designed
+
+        Note: For CRYPTO and COMMODITIES, prices are exogenously determined
+        by global markets (presidential cycle, etc.), so we skip price discovery
+        for these markets. They can still process trades but price is set elsewhere.
         """
         # Match orders
         trades = self.order_book.match_orders(tick)
 
-        # Update price based on trades
-        if trades:
+        # For exogenously priced markets (BTC, Gold), skip price discovery
+        # Price is set by _apply_monetary_effects in the engine
+        exogenous_markets = {MarketType.CRYPTO, MarketType.COMMODITIES}
+
+        # Update price based on trades (only for endogenous markets)
+        if trades and self.market_type not in exogenous_markets:
             # Price is last trade price
             self.previous_price = self.current_price
             self.current_price = trades[-1].price
@@ -286,9 +294,16 @@ class Market:
             # Store trades
             self.trades.extend(trades)
 
-        # Price adjustment if no trades but order imbalance
+        elif trades and self.market_type in exogenous_markets:
+            # Still track volume and trades, but don't update price
+            self.volume = sum(t.quantity for t in trades)
+            self.volume_history.append(self.volume)
+            self.trades.extend(trades)
+
+        # Price adjustment if no trades but order imbalance (only for endogenous markets)
         elif self.total_demand > 0 or self.total_supply > 0:
-            self._adjust_price_on_imbalance()
+            if self.market_type not in exogenous_markets:
+                self._adjust_price_on_imbalance()
 
         # Update metrics
         self._update_metrics()
