@@ -18,7 +18,12 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.simulation.engine import SimulationEngine, SimulationConfig
+from src.simulation.engine import (
+    SimulationEngine,
+    SimulationConfig,
+    MultiCountrySimulationEngine,
+    MultiCountryConfig,
+)
 from src.agents.government import RegimeType
 from src.data.collectors.bitcoin import get_bitcoin_price
 from src.data.collectors.commodities import get_commodity_prices
@@ -55,8 +60,8 @@ def run(
         "--regime", "-r",
         help="Government regime type"
     ),
-    persons: int = typer.Option(10000, "--persons", "-p", help="Number of person agents"),
-    companies: int = typer.Option(1000, "--companies", help="Number of companies"),
+    persons: int = typer.Option(100000, "--persons", "-p", help="Number of person agents"),
+    companies: int = typer.Option(10000, "--companies", help="Number of companies"),
     intervention: float = typer.Option(
         0.5, "--intervention", "-i",
         help="Central bank intervention level (0-1)"
@@ -524,6 +529,340 @@ def _display_results(engine: SimulationEngine):
 
     # Recommendation
     console.print(f"\n[bold]Recommendation:[/bold] {damage['recommendation']}")
+
+
+@app.command()
+def countries():
+    """
+    List all available countries for multi-country simulation.
+
+    Shows 20 countries with their regime types and economic indicators.
+    """
+    from src.countries.registry import get_all_countries, COUNTRY_REGISTRY
+
+    table = Table(title="Available Countries (20)")
+    table.add_column("Code", style="cyan")
+    table.add_column("Name", style="white")
+    table.add_column("Regime", style="yellow")
+    table.add_column("Intervention", style="red")
+    table.add_column("Currency", style="green")
+
+    for code in get_all_countries():
+        config = COUNTRY_REGISTRY.get(code)
+        if config:
+            table.add_row(
+                code,
+                config.name,
+                config.regime_type.value,
+                f"{config.intervention_level:.0%}",
+                config.currency
+            )
+
+    console.print(table)
+    console.print("\n[dim]Use 'run-multi' to simulate multiple countries together[/dim]")
+
+
+@app.command()
+def run_multi(
+    country_list: str = typer.Option(
+        "USA,CHN,BRA,JPN,DEU",
+        "--countries", "-c",
+        help="Comma-separated country codes"
+    ),
+    months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
+    persons: int = typer.Option(100000, "--persons", "-p", help="Base person agents (scaled by GDP)"),
+):
+    """
+    Run multi-country simulation.
+
+    Simulates multiple countries competing and influencing each other.
+    Tracks war probabilities, trade flows, and crisis contagion.
+
+    Example: python -m src.cli.main run-multi --countries USA,CHN,RUS,BRA --months 12
+    """
+    countries_list = [c.strip().upper() for c in country_list.split(",")]
+
+    console.print(Panel.fit(
+        f"[bold blue]MULTI-COUNTRY SIMULATION[/bold blue]\n"
+        f"[dim]Countries: {', '.join(countries_list)}[/dim]",
+        border_style="blue"
+    ))
+
+    config = MultiCountryConfig(
+        countries=countries_list,
+        base_num_persons=persons,
+        base_num_companies=persons // 10,
+        base_num_banks=max(10, persons // 100),
+        ticks_per_run=months,
+        use_real_data=True,
+        scale_by_gdp=True,
+    )
+
+    # Initialize
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Initializing multi-country simulation...", total=None)
+        engine = MultiCountrySimulationEngine(config)
+        engine.initialize()
+        progress.update(task, description="[green]Initialization complete!")
+
+    # Run simulation
+    console.print("\n[bold]Running multi-country simulation...[/bold]")
+    engine.run(months)
+
+    # Display results
+    _display_multi_country_results(engine)
+
+
+@app.command()
+def relations(
+    country1: str = typer.Argument(..., help="First country code"),
+    country2: str = typer.Argument(..., help="Second country code"),
+):
+    """
+    Show relationship between two countries.
+
+    Displays trade volume, tensions, sanctions, and war probability.
+    """
+    from src.geopolitics.relationships import RelationshipManager
+    from src.geopolitics.war_probability import WarProbabilityCalculator
+
+    console.print(Panel.fit(
+        f"[bold]Relationship: {country1.upper()} ↔ {country2.upper()}[/bold]",
+        border_style="cyan"
+    ))
+
+    manager = RelationshipManager()
+    rel = manager.get_relationship(country1.upper(), country2.upper())
+
+    if not rel:
+        console.print(f"[yellow]No direct relationship data for {country1}-{country2}[/yellow]")
+        return
+
+    # Relationship details
+    rel_table = Table(show_header=False)
+    rel_table.add_column("Field", style="cyan")
+    rel_table.add_column("Value", style="white")
+
+    rel_table.add_row("Type", rel.relationship_type.value.upper())
+    rel_table.add_row("Strength", f"{rel.strength:+.2f} (-1 to +1)")
+    rel_table.add_row("Trade Volume", f"${float(rel.trade_volume_usd):,.0f}")
+
+    if rel.tariff_a_to_b > 0 or rel.tariff_b_to_a > 0:
+        rel_table.add_row("Tariffs", f"{country1}: {rel.tariff_a_to_b:.0%}, {country2}: {rel.tariff_b_to_a:.0%}")
+
+    if rel.current_tensions:
+        rel_table.add_row("Tensions", ", ".join(rel.current_tensions))
+
+    if rel.has_active_sanctions:
+        sanctions = rel.sanctions_a_on_b + rel.sanctions_b_on_a
+        rel_table.add_row("Sanctions", ", ".join(sanctions))
+
+    console.print(rel_table)
+
+    # War probability
+    calculator = WarProbabilityCalculator()
+    assessment = calculator.calculate_war_probability(rel)
+
+    war_table = Table(title="War Risk Assessment", show_header=False)
+    war_table.add_column("Factor", style="cyan")
+    war_table.add_column("Value", style="red" if assessment.probability > 0.05 else "yellow")
+
+    war_table.add_row("Probability", f"{assessment.probability:.1%}")
+    war_table.add_row("Risk Level", assessment.risk_level.upper())
+    war_table.add_row("Primary Triggers", ", ".join(t.value for t in assessment.primary_triggers[:3]))
+    war_table.add_row("Most Likely Type", assessment.most_likely_type.value)
+    war_table.add_row("Nuclear Risk", "YES" if assessment.nuclear_risk else "No")
+
+    console.print(war_table)
+
+    if assessment.de_escalation_factors:
+        console.print(f"\n[green]De-escalation factors:[/green] {', '.join(assessment.de_escalation_factors[:3])}")
+
+
+@app.command()
+def war_risks():
+    """
+    Show all high war-risk country pairs.
+
+    Lists pairs with >3% war probability, sorted by risk.
+    """
+    from src.geopolitics.relationships import RelationshipManager
+    from src.geopolitics.war_probability import WarProbabilityCalculator
+
+    console.print(Panel.fit(
+        "[bold red]WAR RISK ANALYSIS[/bold red]\n"
+        "[dim]Pairs with >3% conflict probability[/dim]",
+        border_style="red"
+    ))
+
+    manager = RelationshipManager()
+    calculator = WarProbabilityCalculator()
+
+    # Get all high-risk pairs
+    high_risk = manager.get_high_war_risk_pairs(threshold=0.03)
+
+    if not high_risk:
+        console.print("[green]No high-risk pairs detected (all <3%)[/green]")
+        return
+
+    table = Table(title="High War Risk Pairs")
+    table.add_column("Countries", style="cyan")
+    table.add_column("Probability", style="red")
+    table.add_column("Risk Level", style="yellow")
+
+    for country_a, country_b, prob in high_risk:
+        risk_level = "CRITICAL" if prob >= 0.10 else ("HIGH" if prob >= 0.05 else "MODERATE")
+        table.add_row(
+            f"{country_a} ↔ {country_b}",
+            f"{prob:.1%}",
+            risk_level
+        )
+
+    console.print(table)
+
+    # Summary
+    console.print(f"\n[bold]Summary:[/bold]")
+    console.print(f"  Total high-risk pairs: {len(high_risk)}")
+    if high_risk:
+        highest = high_risk[0]
+        console.print(f"  Highest risk: {highest[0]}-{highest[1]} ({highest[2]:.1%})")
+
+    console.print("\n[dim]Austrian insight: Trade reduces war probability (peace through commerce)[/dim]")
+
+
+@app.command()
+def compare_countries(
+    country_list: str = typer.Argument(..., help="Comma-separated country codes"),
+    months: int = typer.Option(6, "--months", "-m", help="Months to simulate"),
+):
+    """
+    Compare multiple countries after simulation.
+
+    Runs simulation and ranks countries by freedom index.
+
+    Example: compare-countries USA,CHE,BRA,CHN,TUR
+    """
+    countries_list = [c.strip().upper() for c in country_list.split(",")]
+
+    console.print(Panel.fit(
+        f"[bold]Country Comparison[/bold]\n"
+        f"[dim]{', '.join(countries_list)}[/dim]",
+        border_style="blue"
+    ))
+
+    config = MultiCountryConfig(
+        countries=countries_list,
+        base_num_persons=100000,
+        ticks_per_run=months,
+    )
+
+    # Initialize and run
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Running comparison...", total=None)
+        engine = MultiCountrySimulationEngine(config)
+        engine.initialize()
+        engine.run(months)
+        progress.update(task, description="[green]Done!")
+
+    # Get comparison
+    comparison = engine.compare_countries()
+
+    table = Table(title=f"Country Comparison ({months} months)")
+    table.add_column("Rank", style="cyan")
+    table.add_column("Country", style="white")
+    table.add_column("Regime", style="yellow")
+    table.add_column("Freedom", style="green")
+    table.add_column("Inflation", style="red")
+    table.add_column("CB Damage", style="red")
+
+    for rank, (country, data) in enumerate(comparison.items(), 1):
+        table.add_row(
+            str(rank),
+            country,
+            data["regime"],
+            f"{data['freedom_index']:.0f}",
+            f"{data['inflation']:.1%}",
+            f"${data['cb_damage']:,.0f}"
+        )
+
+    console.print(table)
+
+    # Winner
+    winner = list(comparison.keys())[0]
+    console.print(f"\n[bold green]Best outcome: {winner}[/bold green] (highest freedom index)")
+    console.print("[dim]Hoppe's thesis: Less intervention = better outcomes[/dim]")
+
+
+def _display_multi_country_results(engine: MultiCountrySimulationEngine):
+    """Display multi-country simulation results"""
+    console.print("\n")
+
+    summary = engine.get_summary()
+
+    # Global metrics
+    global_table = Table(title="Global Metrics", show_header=False)
+    global_table.add_column("Metric", style="cyan")
+    global_table.add_column("Value", style="green")
+
+    gm = summary.get("global_metrics", {})
+    global_table.add_row("Average Inflation", f"{gm.get('avg_inflation', 0):.1%}")
+    global_table.add_row("Average Freedom", f"{gm.get('avg_freedom_index', 0):.1f}")
+    global_table.add_row("Total CB Damage", f"${float(gm.get('total_cb_damage', '0')):,.0f}")
+    global_table.add_row("Total Gov Damage", f"${float(gm.get('total_gov_damage', '0')):,.0f}")
+    global_table.add_row("High War Risk Pairs", str(gm.get("high_war_risk_pairs", 0)))
+    console.print(global_table)
+
+    # Country summaries
+    country_table = Table(title="Country Results")
+    country_table.add_column("Country", style="cyan")
+    country_table.add_column("Freedom", style="green")
+    country_table.add_column("Inflation", style="yellow")
+    country_table.add_column("Unemployment", style="yellow")
+    country_table.add_column("BTC Price", style="magenta")
+
+    for country, data in summary.get("countries", {}).items():
+        country_table.add_row(
+            country,
+            f"{data['freedom_index']:.0f}",
+            f"{data['inflation']:.1%}",
+            f"{data['unemployment']:.1%}",
+            f"${float(data['btc_price']):,.0f}"
+        )
+
+    console.print(country_table)
+
+    # War risks
+    war_risks = summary.get("war_risks", [])
+    if war_risks:
+        war_table = Table(title="War Risks (Top 5)")
+        war_table.add_column("Countries", style="cyan")
+        war_table.add_column("Probability", style="red")
+        war_table.add_column("Triggers", style="yellow")
+
+        for risk in war_risks[:5]:
+            war_table.add_row(
+                f"{risk['countries'][0]} ↔ {risk['countries'][1]}",
+                f"{risk['probability']:.1%}",
+                ", ".join(risk.get("triggers", [])[:2])
+            )
+
+        console.print(war_table)
+
+    # Relationship summary
+    rel_summary = summary.get("relationship_summary", {})
+    if rel_summary:
+        console.print(f"\n[bold]Relationships:[/bold] "
+                     f"{rel_summary.get('allies', 0)} allies, "
+                     f"{rel_summary.get('rivals', 0)} rivals, "
+                     f"{rel_summary.get('enemies', 0)} enemies")
 
 
 @app.callback()
