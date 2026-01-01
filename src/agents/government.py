@@ -906,7 +906,42 @@ class Government(Agent):
         if regime_type is None:
             regime_type = default_regimes.get(country, RegimeType.DEMOCRACY_LIBERAL)
 
-        return cls(
+        gov = cls(
             country=country,
             regime_type=regime_type,
         )
+
+        # Set election cycle based on country's actual political calendar
+        # USA: Trump inaugurated Jan 2025, so Jan 2026 = Year 2
+        # (Year 1 = first year of term, Year 4 = election year)
+        from datetime import datetime
+        current_year = datetime.now().year
+
+        # Calculate years since last presidential inauguration
+        usa_inauguration_years = [2025, 2021, 2017, 2013, 2009, 2005, 2001]  # Recent ones
+        brazil_inauguration_years = [2023, 2019, 2015, 2011]  # Brazil 4-year cycle
+        mexico_inauguration_years = [2024, 2018, 2012, 2006]  # Mexico 6-year but use 4
+
+        if country == "USA":
+            # Find most recent inauguration
+            for year in usa_inauguration_years:
+                if current_year >= year:
+                    years_since = current_year - year
+                    # Year 1 starts at inauguration (Jan), we track 0-based
+                    gov.current_year_in_cycle = years_since % 4
+                    break
+        elif country == "BRA":
+            for year in brazil_inauguration_years:
+                if current_year >= year:
+                    years_since = current_year - year
+                    gov.current_year_in_cycle = years_since % 4
+                    break
+        elif country == "MEX":
+            for year in mexico_inauguration_years:
+                if current_year >= year:
+                    years_since = current_year - year
+                    gov.current_year_in_cycle = years_since % 4
+                    break
+        # Other countries keep the random initialization
+
+        return gov

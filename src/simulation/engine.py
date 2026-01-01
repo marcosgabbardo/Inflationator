@@ -1030,31 +1030,65 @@ class SimulationEngine:
             old_price = market.current_price
             market.previous_price = old_price
 
-            # Base price change from money supply
+            # CRYPTO: Uses presidential cycle as PRIMARY driver (independent of monetary policy)
+            if market.market_type == MarketType.CRYPTO:
+                # Bitcoin: Follows US Presidential Cycle
+                # Research shows BTC correlates with traditional market cycles:
+                # - Year 1 (new president): Bull run - liquidity optimism
+                # - Year 2: Bear market - policy uncertainty, tightening
+                # - Year 3: Recovery - mid-term clarity
+                # - Year 4 (election): Moderate bull - election stimulus
+
+                # Get presidential cycle year (1-4)
+                cycle_year = 2  # Default to year 2 (bear) if no government
+                if self.government:
+                    # current_year_in_cycle is 0-4, convert to 1-4
+                    cycle_year = int(self.government.current_year_in_cycle) + 1
+                    if cycle_year > 4:
+                        cycle_year = 1
+
+
+                if cycle_year == 1:
+                    # YEAR 1: BULL RUN (new president)
+                    # Historical: ~80-150% annual = 5-8% monthly
+                    btc_monthly = 0.05 + random.gauss(0, 0.025)
+                    btc_monthly = max(0.0, min(0.08, btc_monthly))  # 0-8% (never negative in bull)
+                elif cycle_year == 2:
+                    # YEAR 2: BEAR MARKET
+                    # Historical: -20% to -40% annual = -2% to -4% monthly
+                    btc_monthly = -0.025 + random.gauss(0, 0.015)
+                    btc_monthly = max(-0.05, min(0.0, btc_monthly))  # -5% to 0% (never positive in bear)
+                elif cycle_year == 3:
+                    # YEAR 3: RECOVERY
+                    # Historical: +20-40% annual = 1.5-3% monthly
+                    btc_monthly = 0.02 + random.gauss(0, 0.015)
+                    btc_monthly = max(-0.02, min(0.035, btc_monthly))  # -2% to +3.5%
+                else:  # cycle_year == 4
+                    # YEAR 4: ELECTION YEAR (moderate bull)
+                    # Historical: +30-50% annual = 2-4% monthly
+                    btc_monthly = 0.025 + random.gauss(0, 0.015)
+                    btc_monthly = max(-0.01, min(0.04, btc_monthly))  # -1% to +4%
+
+                # QE/QT modifies the cycle effect slightly
+                if qe_active:
+                    btc_monthly += 0.005  # QE adds 0.5% boost
+                elif qt_active:
+                    btc_monthly -= 0.005  # QT subtracts 0.5%
+
+                price_factor = Decimal(str(1 + btc_monthly))
+                market.current_price = old_price * price_factor
+                market.price_history.append(market.current_price)
+                if len(market.price_history) > 1000:
+                    market.price_history.pop(0)
+                continue  # Skip the rest for crypto
+
+            # OTHER MARKETS: Use monetary policy as driver
             if monthly_money_effect > 0:
                 # EXPANSION: Prices rise (but controlled by CB)
                 # Consumer goods: dampened effect (the "controlled" inflation)
                 # Hard assets: amplified effect (people flee to safety)
 
-                if market.market_type == MarketType.CRYPTO:
-                    # Bitcoin: Benefits from QE but NOT exponentially
-                    # Realistic annual returns:
-                    # - Bull market (QE): +30-50% annually = +2-4% monthly
-                    # - Normal: +10-20% annually = +0.8-1.5% monthly
-                    # - Bear (QT): -20-40% annually
-                    if qe_active:
-                        # During QE, BTC appreciates but realistically
-                        # ~3% monthly max = ~42% annual (compounded)
-                        btc_monthly = 0.025 + random.gauss(0, 0.015)  # 2.5% base ± 1.5%
-                        btc_monthly = max(-0.05, min(0.04, btc_monthly))  # Cap at ±4-5%
-                        price_factor = Decimal(str(1 + btc_monthly))
-                    else:
-                        # Normal growth: ~1% monthly = ~12% annual
-                        btc_monthly = 0.01 + random.gauss(0, 0.02)
-                        btc_monthly = max(-0.03, min(0.03, btc_monthly))
-                        price_factor = Decimal(str(1 + btc_monthly))
-
-                elif market.market_type == MarketType.COMMODITIES:
+                if market.market_type == MarketType.COMMODITIES:
                     # Gold/Silver: Also benefit from QE (traditional safe haven)
                     # Realistic: ~10-20% annual appreciation during QE
                     if qe_active:
@@ -1076,13 +1110,9 @@ class SimulationEngine:
                 # CONTRACTION (QT): Prices should fall, but...
                 # Consumer goods: sticky downward (wages don't fall)
                 # Hard assets: can fall during QT
+                # Note: CRYPTO is handled separately above via continue
 
-                if market.market_type == MarketType.CRYPTO:
-                    # BTC can be volatile during QT
-                    btc_factor = 1 + monthly_money_effect * 1.5 + random.gauss(0, 0.01)
-                    price_factor = Decimal(str(max(0.95, btc_factor)))
-
-                elif market.market_type == MarketType.COMMODITIES:
+                if market.market_type == MarketType.COMMODITIES:
                     # Gold more stable during QT
                     gold_factor = 1 + monthly_money_effect * 0.5
                     price_factor = Decimal(str(max(0.98, gold_factor)))
@@ -1093,7 +1123,8 @@ class SimulationEngine:
                     price_factor = Decimal(str(max(0.995, 1 + monthly_money_effect * 0.1)))
 
             else:
-                # Neutral: small random walk
+                # Neutral monetary policy: small random walk for non-crypto markets
+                # Note: CRYPTO is handled separately above via continue
                 price_factor = Decimal(str(1 + random.gauss(0, 0.001)))
 
             # Apply price change
