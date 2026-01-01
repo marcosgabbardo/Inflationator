@@ -468,33 +468,81 @@ class MarketManager:
         """Get prices for all markets"""
         return {m.name: m.current_price for m in self.markets.values()}
 
-    def get_inflation_index(self) -> float:
+    def get_inflation_index(self, lookback_months: int = 3) -> float:
         """
-        Calculate our own inflation index.
+        Calculate a CPI-like inflation index using rolling price changes.
 
-        Austrian Theory:
-        - Don't trust government CPI
-        - Use actual market prices
-        - Weight by importance
+        This is a "real" inflation measure that:
+        - Only includes consumer goods and labor (like CPI)
+        - EXCLUDES crypto and commodities (too volatile)
+        - Uses longer lookback for stability
+        - Dampens short-term noise
+
+        Austrian Theory Reminder:
+        - This measures PRICE changes, not true inflation (which is money supply growth)
+        - Real inflation happens in money printing, prices just reflect it
+        - But this metric is useful for simulation feedback
+
+        Args:
+            lookback_months: Number of months to look back for rolling inflation (default 3 for quarterly)
         """
         if not self.markets:
             return 0.0
 
         weighted_changes = []
+        total_weight = 0.0
+
+        # CPI-like weights: only consumer goods and labor
+        # Exclude crypto and commodities which are investment assets, not consumption
         weights = {
-            MarketType.CONSUMER_GOODS: 0.4,
-            MarketType.COMMODITIES: 0.3,
-            MarketType.LABOR: 0.2,
-            MarketType.CAPITAL_GOODS: 0.1,
+            MarketType.CONSUMER_GOODS: 0.7,  # Main component like CPI
+            MarketType.LABOR: 0.3,           # Wage inflation component
+            MarketType.CAPITAL_GOODS: 0.0,   # Not in CPI
+            MarketType.COMMODITIES: 0.0,     # Exclude - too volatile, investment asset
+            MarketType.CRYPTO: 0.0,          # Exclude - investment asset, not consumption
         }
 
         for market in self.markets.values():
-            weight = weights.get(market.market_type, 0.1)
-            change = market.price_change_pct / 100  # Convert to decimal
-            weighted_changes.append(change * weight)
+            weight = weights.get(market.market_type, 0.0)
 
-        if weighted_changes:
-            return sum(weighted_changes) / sum(weights.values())
+            # Skip markets with zero weight
+            if weight <= 0:
+                continue
+
+            # Calculate rolling price change from price history
+            if len(market.price_history) >= lookback_months + 1:
+                # Compare current price to price N months ago
+                old_price = market.price_history[-(lookback_months + 1)]
+                current_price = market.price_history[-1]
+
+                if old_price > 0:
+                    # Calculate period change
+                    period_change = float((current_price - old_price) / old_price)
+                    # Scale to approximate annual rate (12 months = 1 year)
+                    annualized_change = period_change * (12 / lookback_months)
+                    # Soft cap using tanh to smooth extreme values
+                    # This maps any value to (-0.3, 0.3) range smoothly
+                    import math
+                    annualized_change = 0.3 * math.tanh(annualized_change / 0.3)
+                    weighted_changes.append(annualized_change * weight)
+                    total_weight += weight
+
+            elif len(market.price_history) >= 2:
+                # Fallback to simple month-over-month change
+                old_price = market.price_history[-2]
+                current_price = market.price_history[-1]
+
+                if old_price > 0:
+                    import math
+                    change = float((current_price - old_price) / old_price)
+                    # Annualize and soft cap using tanh (12 months = 1 year)
+                    annualized_change = change * 12
+                    annualized_change = 0.3 * math.tanh(annualized_change / 0.3)
+                    weighted_changes.append(annualized_change * weight)
+                    total_weight += weight
+
+        if weighted_changes and total_weight > 0:
+            return sum(weighted_changes) / total_weight
         return 0.0
 
     def setup_default_markets(self) -> None:

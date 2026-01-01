@@ -42,42 +42,72 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-## Usage
+## CLI Commands
 
-### Run Simulation
+### 1. Run Simulation
 
 ```bash
-# Basic simulation (52 weeks, liberal democracy regime)
+# Basic simulation (12 months, liberal democracy regime)
 python -m src.cli.main run
 
 # Custom simulation
-python -m src.cli.main run --weeks 104 --regime ancap --persons 50000
+python -m src.cli.main run --months 24 --regime ancap --persons 50000
 
 # Totalitarian regime (for comparison)
-python -m src.cli.main run --regime totalitarian --weeks 52
+python -m src.cli.main run --regime totalitarian --months 12
+
+# Full options
+python -m src.cli.main run \
+  --months 12 \
+  --country USA \
+  --regime democracy_liberal \
+  --persons 10000 \
+  --companies 1000 \
+  --intervention 0.5
 ```
 
-### Fetch Real Prices
+### 2. View Real-World Conditions (NEW!)
+
+```bash
+# Fetch TODAY's economy from private market sources
+python -m src.cli.main conditions
+
+# For a specific country
+python -m src.cli.main conditions --country USA
+```
+
+This shows:
+- **Asset prices**: Bitcoin, Gold, Silver, Oil (real-time)
+- **Market indices**: S&P 500, VIX, DXY
+- **Interest rates**: Treasury yields, yield curve status
+- **Sentiment**: Market fear level, Crypto Fear & Greed
+- **Derived metrics**: Real inflation estimate (commodity-based), dollar debasement, recession probability
+
+### 3. Fetch Real Prices
 
 ```bash
 # Fetch Bitcoin and commodity prices from real APIs
 python -m src.cli.main prices
 ```
 
-### What-If Scenarios
+### 4. What-If Scenarios
 
 ```bash
-# FED doubles the monetary base
-python -m src.cli.main scenario fed_doubles_money
+# Monetary Scenarios
+python -m src.cli.main scenario fed_doubles_money      # FED doubles money supply
+python -m src.cli.main scenario hyperinflation         # Extreme money printing (10x)
+python -m src.cli.main scenario zero_intervention      # No CB or government
 
-# Transition to anarcho-capitalism
-python -m src.cli.main scenario ancap_transition
+# Political Scenarios
+python -m src.cli.main scenario ancap_transition       # Transition to anarcho-capitalism
+python -m src.cli.main scenario election_year          # Simulate election year fiscal easing
 
-# Zero intervention (Austrian ideal)
-python -m src.cli.main scenario zero_intervention
+# Trade War Scenarios (NEW!)
+python -m src.cli.main scenario trade_war --tariff 0.25   # 25% tariffs
+python -m src.cli.main scenario trump_tariffs             # Trump-style tariffs (20% general + sector-specific)
 ```
 
-### Compare Regimes
+### 5. Compare Regimes
 
 ```bash
 # Compare democracy vs monarchy (test Hoppe's thesis)
@@ -85,12 +115,21 @@ python -m src.cli.main compare democracy_liberal monarchy
 
 # Compare ancap vs totalitarian
 python -m src.cli.main compare ancap totalitarian
+
+# Compare with custom duration
+python -m src.cli.main compare minarchy democracy_socialist --months 24
 ```
 
-### List Available Regimes
+### 6. List Available Regimes
 
 ```bash
 python -m src.cli.main regimes
+```
+
+### 7. Initialize Database (Optional)
+
+```bash
+python -m src.cli.main init-db
 ```
 
 ## Project Structure
@@ -113,9 +152,11 @@ inflationator/
 │   │       └── business_cycle.py  # ABCT implementation
 │   │
 │   ├── data/                # Data collection
+│   │   ├── real_world_conditions.py  # TODAY's economy aggregator
 │   │   └── collectors/
-│   │       ├── bitcoin.py   # CoinGecko API
-│   │       └── commodities.py # Yahoo Finance
+│   │       ├── bitcoin.py        # CoinGecko API
+│   │       ├── commodities.py    # Yahoo Finance
+│   │       └── market_sentiment.py  # Indices, VIX, yields
 │   │
 │   ├── simulation/          # Simulation engine
 │   │   └── engine.py        # Main loop
@@ -134,30 +175,43 @@ inflationator/
 └── README.md
 ```
 
-## Data Sources
+## Data Sources (Private Only - No Government Data)
 
-The simulator uses **only private sources**, never government data:
-
-- **Bitcoin**: CoinGecko API (real-time price)
-- **Gold/Silver/Oil**: Yahoo Finance
-- **Internal prices**: Agent-based simulation with order book matching
+| Category | Source | API |
+|----------|--------|-----|
+| Bitcoin | CoinGecko | Free API |
+| Gold/Silver/Oil | Yahoo Finance | yfinance |
+| S&P 500 / VIX / DXY | Yahoo Finance | yfinance |
+| Treasury Yields | Yahoo Finance | yfinance |
+| Crypto Fear & Greed | Alternative.me | Free API |
 
 ## Metrics Calculated
 
-### Real Inflation
-Calculated from market prices, not government CPI.
+### Real Inflation (Not CPI!)
+- Calculated from commodity prices (Gold, Oil, etc.)
+- Current estimate: **~30% annually** (vs government's "2-3%")
+- Dollar debasement over 10 years: **260%+** (vs gold)
 
 ### Central Bank Damage
 - Money printed (QE)
+- Money destroyed (QT)
 - Malinvestment induced
 - Bubbles created
 - Bailouts given
+- QE/QT cycles tracked
 
 ### Government Damage
 - Deadweight loss from taxes
 - Compliance costs
 - Capital destroyed (wars)
 - Trade distortion (tariffs)
+- Election year manipulation
+
+### Political Business Cycle (Democracies)
+- Election cycle tracking (4 years)
+- Pre-election fiscal easing
+- Central bank pressure
+- Tax collection efficiency drops
 
 ### Freedom Index
 0-100 scale, inverse of intervention level.
@@ -186,26 +240,58 @@ Calculated from market prices, not government CPI.
 
 ## Key Features
 
-- **100,000+ agents** simulating individual economic decisions
-- **Real-time Bitcoin/Gold prices** from private APIs
+- **10,000+ agents** simulating individual economic decisions
+- **Real-time data** from private APIs (BTC, Gold, VIX, yields)
+- **TODAY's economy** as initial conditions (not mock data)
 - **Business cycle tracking** based on ABCT
+- **Inflation targeting** simulation (QE/QT cycles)
+- **Trade war scenarios** (tariffs, protectionism)
+- **Political business cycle** (election year manipulation)
 - **Regime comparison** to test Hoppe's thesis
 - **Credit system** with fractional reserve banking
 - **Labor market** with employment dynamics
 
-## Example Results
+## Example Output
 
 ```
-=== REGIME COMPARISON ===
-Metric           | Ancap          | Democracy
---------------------------------------------------
-Freedom Index    |         100.0  |          50.0
-Unemployment     |          6.6%  |          7.2%
-CB Damage ($)    |        21,169  | 14,250,016,207
+REAL WORLD CONDITIONS - TODAY'S ECONOMY
+==================================================
 
-Ancap has higher freedom - as Rothbard predicted!
+                   ASSET PRICES
+--------------------------------------------------
+  Bitcoin:  $88,194
+  Gold:     $4,326
+  Oil:      $57
+
+                  DERIVED METRICS
+--------------------------------------------------
+  Real Inflation Est:   30.0% (commodity-based)
+  Dollar Debasement:    260.5% (10 years)
+  Recession Prob:       15%
+
+Austrian Interpretation:
+  - Real inflation (30.0%) significantly higher than CPI claims
+  - Dollar has lost 260% of purchasing power in 10 years
+```
+
+```
+       Simulation Results
+┌────────────────┬──────────────┐
+│ Duration       │ 12 months    │
+│ Inflation Rate │ 13.03%       │
+│ Bitcoin Price  │ $273,666     │
+│ Gold Price     │ $13,944.71   │
+└────────────────┴──────────────┘
+          Intervention Damage
+┌─────────────────────┬────────────────┐
+│ Central Bank Damage │ $1,713,568,267 │
+│ Government Damage   │ $31,908,023    │
+│ Freedom Index       │ 50.0/100       │
+└─────────────────────┴────────────────┘
 ```
 
 ---
 
 *"Inflation is taxation without legislation."* - Milton Friedman
+
+*"The first panacea for a mismanaged nation is inflation of the currency; the second is war. Both bring a temporary prosperity; both bring a permanent ruin."* - Ernest Hemingway

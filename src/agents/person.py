@@ -71,6 +71,9 @@ class Person(Agent):
         self.employer_id: Optional[str] = None
         self.wage: Decimal = Decimal("0")
 
+        # Expectations (updated from real-world conditions)
+        self.inflation_expectation: float = 0.03  # Expected annual inflation (default 3%)
+
     @property
     def employed(self) -> bool:
         return self.employer_id is not None

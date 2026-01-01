@@ -17,9 +17,18 @@ Austrian Theory (Mises, Hayek, Rothbard):
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
+from enum import Enum
 import random
 
 from .base import Agent, AgentType, AgentState
+
+
+class MonetaryPolicy(str, Enum):
+    """Current monetary policy stance"""
+    TIGHT = "tight"           # QT - reducing money supply
+    NEUTRAL = "neutral"       # Stable
+    EASY = "easy"             # QE - expanding money supply
+    EMERGENCY = "emergency"   # Crisis mode - massive QE
 
 
 @dataclass
@@ -27,7 +36,9 @@ class CentralBankState(AgentState):
     """State for central bank villain"""
     base_money: Decimal = Decimal("0")
     money_printed: Decimal = Decimal("0")
+    money_destroyed: Decimal = Decimal("0")  # QT
     assets_purchased: Decimal = Decimal("0")
+    assets_sold: Decimal = Decimal("0")  # QT
     bailouts_given: Decimal = Decimal("0")
 
     # Damage metrics (tracking the harm caused)
@@ -35,6 +46,12 @@ class CentralBankState(AgentState):
     malinvestment_induced: Decimal = Decimal("0")
     bubbles_created: int = 0
     cycles_caused: int = 0
+
+    # Policy tracking
+    qe_rounds: int = 0
+    qt_rounds: int = 0
+    current_policy: str = "neutral"
+    rate_cuts_cumulative: float = 0.0  # Track cumulative rate changes
 
 
 class CentralBank(Agent):
@@ -73,9 +90,24 @@ class CentralBank(Agent):
         # Intervention level (0 = no intervention, 1 = maximum)
         self.intervention_level = intervention_level
 
+        # ===========================================
+        # INFLATION TARGETING (The "Fiction")
+        # ===========================================
+        # The Fed pretends to control inflation through these tools
+        # Austrian view: This is impossible - they cause inflation, they can't control it
+        self.inflation_target = 0.02  # 2% target (Fed's "mandate")
+        self.inflation_tolerance = 0.01  # ±1% band
+
         # Policy rates
         self.policy_rate = 0.05  # Target interest rate
         self.natural_rate = 0.05  # What rate SHOULD be (time preference)
+
+        # Rate bounds (since 1971 fiat era)
+        self.rate_floor = 0.0  # ZIRP (zero interest rate policy)
+        self.rate_ceiling = 0.20  # Volcker-style extreme tightening
+
+        # Current monetary policy stance
+        self.current_policy = MonetaryPolicy.NEUTRAL
 
         # State
         self.state = CentralBankState(
@@ -83,9 +115,15 @@ class CentralBank(Agent):
         )
 
         # Balance sheet
-        self.treasuries_held: Decimal = Decimal("0")
-        self.mortgage_backed_securities: Decimal = Decimal("0")
+        self.treasuries_held: Decimal = initial_base_money * Decimal("0.5")
+        self.mortgage_backed_securities: Decimal = initial_base_money * Decimal("0.3")
         self.toxic_assets: Decimal = Decimal("0")
+
+        # QE/QT tracking
+        self.qe_active = False
+        self.qt_active = False
+        self.consecutive_qe_weeks = 0
+        self.consecutive_qt_weeks = 0
 
         # Cumulative damage tracking
         self._total_damage: Decimal = Decimal("0")
@@ -201,7 +239,74 @@ class CentralBank(Agent):
         if self.state.assets_purchased > self.state.base_money * Decimal("0.3"):
             self.state.bubbles_created += 1
 
+        # Track QE activity
+        self.qe_active = True
+        self.qt_active = False
+        self.consecutive_qe_weeks += 1
+        self.consecutive_qt_weeks = 0
+        self.state.qe_rounds += 1
+        self.current_policy = MonetaryPolicy.EASY
+
         return printed
+
+    def quantitative_tightening(
+        self,
+        amount: Decimal,
+        asset_type: str = "treasuries"
+    ) -> Decimal:
+        """
+        Sell assets and destroy money - QT (Quantitative Tightening)
+
+        The Fed's attempt to "unwind" QE and control inflation.
+
+        Austrian Theory:
+        - Too little, too late - damage is done
+        - Can't undo malinvestment
+        - Will cause market crashes when liquidity removed
+        - The "cure" causes another recession
+
+        Reality:
+        - Fed always chickens out when markets drop ("Fed put")
+        - QT never equals previous QE
+        - Net effect is always expansionary long-term
+        """
+        # Limit QT to available assets
+        if asset_type == "treasuries":
+            sellable = min(amount, self.treasuries_held)
+            self.treasuries_held -= sellable
+        elif asset_type == "mbs":
+            sellable = min(amount, self.mortgage_backed_securities)
+            self.mortgage_backed_securities -= sellable
+        else:
+            sellable = Decimal("0")
+
+        if sellable > 0:
+            # "Destroy" the money received from sale
+            self.state.base_money -= sellable
+            self.state.money_destroyed += sellable
+            self.state.assets_sold += sellable
+
+            # Track QT activity
+            self.qt_active = True
+            self.qe_active = False
+            self.consecutive_qt_weeks += 1
+            self.consecutive_qe_weeks = 0
+            self.state.qt_rounds += 1
+            self.current_policy = MonetaryPolicy.TIGHT
+
+        return sellable
+
+    def raise_rates(self, amount: float):
+        """
+        Raise interest rates - Fighting inflation
+
+        Austrian Theory:
+        - This is trying to fix the problem they caused
+        - Will cause recession (the bust that was inevitable)
+        - Better to have never lowered rates artificially
+        """
+        new_rate = min(self.rate_ceiling, self.policy_rate + amount)
+        self.policy_rate = new_rate
 
     # ===========================================
     # BAILOUTS (Moral hazard)
@@ -298,15 +403,22 @@ class CentralBank(Agent):
         }
 
     # ===========================================
-    # MAIN STEP FUNCTION
+    # MAIN STEP FUNCTION - INFLATION TARGETING
     # ===========================================
 
     def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Execute one simulation step.
+        Execute one simulation step with INFLATION TARGETING.
 
-        The central bank takes actions based on its intervention level.
-        Higher intervention = more damage to the economy.
+        The Fed's dual mandate (the "fiction"):
+        1. Price stability (2% inflation target)
+        2. Maximum employment
+
+        Reality (Austrian view):
+        - They CAUSE inflation, then pretend to fight it
+        - QE during recessions → QT when inflation rises
+        - Net effect: always expansionary long-term
+        - Real assets (Gold, BTC) benefit during QE periods
         """
         actions = []
 
@@ -319,54 +431,203 @@ class CentralBank(Agent):
         avg_time_preference = world_state.get("avg_time_preference", 0.5)
         self.natural_rate = 0.02 + avg_time_preference * 0.08
 
-        # ===========================================
-        # INTERVENTION BASED ON intervention_level
-        # ===========================================
+        # No intervention if level is 0 (Austrian ideal)
+        if self.intervention_level == 0:
+            self.current_policy = MonetaryPolicy.NEUTRAL
+            self.state.current_policy = "neutral"
+            return actions
 
-        if self.intervention_level > 0:
-            # 1. Rate manipulation
-            if unemployment > 0.06:  # "Too high" unemployment
-                rate_cut = self.intervention_level * 0.005
-                self.lower_rates(rate_cut)
+        # ===========================================
+        # INFLATION TARGETING LOGIC
+        # ===========================================
+        # This is how the Fed actually operates (post-1971)
+
+        inflation_gap = inflation_rate - self.inflation_target
+        unemployment_threshold = 0.06  # "Natural" unemployment
+        recession_risk = gdp_growth < 0 or unemployment > 0.08
+
+        # Determine policy stance
+        if inflation_rate > self.inflation_target + self.inflation_tolerance:
+            # ===========================================
+            # INFLATION TOO HIGH → TIGHTENING (QT)
+            # ===========================================
+            # This is what they do when inflation spikes (like 2022-2023)
+
+            actions.extend(self._execute_tightening(inflation_gap, world_state))
+
+        elif recession_risk or unemployment > unemployment_threshold:
+            # ===========================================
+            # RECESSION RISK → EASING (QE)
+            # ===========================================
+            # This is the "Fed put" - always bail out the economy
+
+            actions.extend(self._execute_easing(unemployment, gdp_growth, world_state))
+
+        else:
+            # ===========================================
+            # NEUTRAL - But still slightly expansionary
+            # ===========================================
+            # Even "neutral" Fed policy is net expansionary
+
+            self.current_policy = MonetaryPolicy.NEUTRAL
+            self.state.current_policy = "neutral"
+
+            # Small baseline expansion (the long-term inflationary bias)
+            if self.intervention_level > 0.2:
+                baseline_expansion = Decimal(str(self.intervention_level * 1e9))
+                self.print_money(baseline_expansion)
                 actions.append({
-                    "type": "rate_cut",
-                    "amount": rate_cut,
-                    "new_rate": self.policy_rate,
-                    "damage": "Sending false signals to entrepreneurs"
+                    "type": "baseline_expansion",
+                    "amount": str(baseline_expansion),
+                    "note": "Even 'neutral' policy is expansionary"
                 })
 
-            # 2. Money printing (QE) if rates near zero
-            if self.policy_rate < 0.01 and self.intervention_level > 0.3:
-                qe_amount = Decimal(str(self.intervention_level * 1e10))
-                self.quantitative_easing(qe_amount)
+        # ===========================================
+        # BAILOUTS (always available if needed)
+        # ===========================================
+        failing_banks = world_state.get("failing_banks", [])
+        if failing_banks and self.intervention_level > 0.5:
+            for bank_id in failing_banks[:3]:
+                bailout_amount = Decimal("10000000000")  # $10B
+                self.bailout(bank_id, bailout_amount)
                 actions.append({
-                    "type": "quantitative_easing",
-                    "amount": str(qe_amount),
-                    "damage": "Debasing currency, stealing from savers"
+                    "type": "bailout",
+                    "institution": bank_id,
+                    "amount": str(bailout_amount),
+                    "damage": "Creating moral hazard"
                 })
-
-            # 3. Bailouts if there are failing banks
-            failing_banks = world_state.get("failing_banks", [])
-            if failing_banks and self.intervention_level > 0.5:
-                for bank_id in failing_banks[:3]:  # Limit bailouts
-                    bailout_amount = Decimal("10000000000")  # $10B
-                    self.bailout(bank_id, bailout_amount)
-                    actions.append({
-                        "type": "bailout",
-                        "institution": bank_id,
-                        "amount": str(bailout_amount),
-                        "damage": "Creating moral hazard"
-                    })
 
         # Record cycle if conditions indicate bust
         if gdp_growth < -0.02 and self.state.malinvestment_induced > 0:
             self.state.cycles_caused += 1
 
-        # Add damage report to actions
+        # Add damage report
         actions.append({
-            "type": "damage_report",
-            "report": self.get_damage_report()
+            "type": "policy_summary",
+            "policy": self.current_policy.value,
+            "inflation_rate": inflation_rate,
+            "target": self.inflation_target,
+            "policy_rate": self.policy_rate,
+            "qe_active": self.qe_active,
+            "qt_active": self.qt_active,
         })
+
+        return actions
+
+    def _execute_tightening(
+        self,
+        inflation_gap: float,
+        world_state: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute tightening policy (QT + rate hikes).
+
+        This is what the Fed does when inflation gets "out of control":
+        1. Raise interest rates
+        2. Sell assets (QT)
+        3. Reduce money supply
+
+        Austrian view: Too little, too late. Damage is done.
+        """
+        actions = []
+
+        # How aggressive based on intervention level and inflation gap
+        aggressiveness = self.intervention_level * min(2.0, abs(inflation_gap))
+
+        # 1. RAISE RATES
+        rate_hike = min(0.0075, aggressiveness * 0.005)  # Max 75bp per step
+        if self.policy_rate < self.rate_ceiling:
+            self.raise_rates(rate_hike)
+            actions.append({
+                "type": "rate_hike",
+                "amount": rate_hike,
+                "new_rate": self.policy_rate,
+                "reason": f"Fighting inflation ({inflation_gap:.1%} above target)"
+            })
+
+        # 2. QUANTITATIVE TIGHTENING
+        # Sell assets proportional to inflation gap
+        qt_amount = Decimal(str(aggressiveness * 5e9))  # Up to $10B per step
+        if qt_amount > 0:
+            sold = self.quantitative_tightening(qt_amount, "treasuries")
+            if sold > 0:
+                actions.append({
+                    "type": "quantitative_tightening",
+                    "amount": str(sold),
+                    "reason": "Reducing money supply to fight inflation"
+                })
+
+        self.current_policy = MonetaryPolicy.TIGHT
+        self.state.current_policy = "tight"
+
+        return actions
+
+    def _execute_easing(
+        self,
+        unemployment: float,
+        gdp_growth: float,
+        world_state: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute easing policy (QE + rate cuts).
+
+        This is the "Fed put" - always rescue the economy:
+        1. Cut interest rates
+        2. Buy assets (QE)
+        3. Print money
+
+        Austrian view: This CAUSES the next boom-bust cycle.
+        """
+        actions = []
+
+        # How aggressive based on recession severity
+        recession_severity = max(0, -gdp_growth) + max(0, unemployment - 0.06)
+        aggressiveness = self.intervention_level * (1 + recession_severity * 5)
+
+        # 1. CUT RATES
+        rate_cut = min(0.005, aggressiveness * 0.003)  # Max 50bp per step
+        if self.policy_rate > self.rate_floor:
+            self.lower_rates(rate_cut)
+            actions.append({
+                "type": "rate_cut",
+                "amount": rate_cut,
+                "new_rate": self.policy_rate,
+                "reason": "Stimulating economy",
+                "damage": "Sending false signals to entrepreneurs"
+            })
+
+        # 2. QUANTITATIVE EASING
+        # More aggressive if rates already at floor (ZIRP)
+        if self.policy_rate <= 0.01:
+            qe_multiplier = 2.0  # Double QE when at zero rates
+        else:
+            qe_multiplier = 1.0
+
+        qe_amount = Decimal(str(aggressiveness * 1e10 * qe_multiplier))
+        if qe_amount > 0:
+            printed = self.quantitative_easing(qe_amount)
+            actions.append({
+                "type": "quantitative_easing",
+                "amount": str(printed),
+                "reason": "Supporting the economy",
+                "damage": "Debasing currency, stealing from savers"
+            })
+
+        # Emergency mode if severe recession
+        if gdp_growth < -0.05 or unemployment > 0.10:
+            self.current_policy = MonetaryPolicy.EMERGENCY
+            self.state.current_policy = "emergency"
+            # Extra emergency stimulus
+            emergency_stimulus = Decimal(str(self.intervention_level * 5e10))
+            self.quantitative_easing(emergency_stimulus, "mbs")
+            actions.append({
+                "type": "emergency_stimulus",
+                "amount": str(emergency_stimulus),
+                "reason": "Crisis response"
+            })
+        else:
+            self.current_policy = MonetaryPolicy.EASY
+            self.state.current_policy = "easy"
 
         return actions
 

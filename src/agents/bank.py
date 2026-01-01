@@ -136,9 +136,9 @@ class Bank(Agent):
         return True
 
     def pay_deposit_interest(self) -> Decimal:
-        """Pay interest to all depositors (weekly)"""
-        weekly_rate = self.deposit_rate / 52
-        total_interest = self.state.total_deposits * Decimal(str(weekly_rate))
+        """Pay interest to all depositors (monthly)"""
+        monthly_rate = self.deposit_rate / 12
+        total_interest = self.state.total_deposits * Decimal(str(monthly_rate))
 
         if total_interest <= self.state.reserves:
             self.state.reserves -= total_interest
@@ -191,7 +191,7 @@ class Bank(Agent):
         self,
         borrower_id: str,
         amount: Decimal,
-        term_weeks: int,
+        term_months: int,
         collateral: Decimal = Decimal("0")
     ) -> bool:
         """
@@ -208,8 +208,8 @@ class Bank(Agent):
             "principal": amount,
             "remaining": amount,
             "rate": self.lending_rate,
-            "term": term_weeks,
-            "weeks_remaining": term_weeks,
+            "term": term_months,
+            "months_remaining": term_months,
             "collateral": collateral,
         }
 
@@ -229,13 +229,13 @@ class Bank(Agent):
             return None
 
         loan = self.loans[borrower_id]
-        if loan["weeks_remaining"] <= 0:
+        if loan["months_remaining"] <= 0:
             return None
 
         # Calculate payment (simple amortization)
-        weekly_rate = loan["rate"] / 52
+        monthly_rate = loan["rate"] / 12
         principal_payment = loan["principal"] / Decimal(str(loan["term"]))
-        interest_payment = loan["remaining"] * Decimal(str(weekly_rate))
+        interest_payment = loan["remaining"] * Decimal(str(monthly_rate))
         total_payment = principal_payment + interest_payment
 
         return total_payment
@@ -248,19 +248,19 @@ class Bank(Agent):
         loan = self.loans[borrower_id]
 
         # Apply payment
-        weekly_rate = loan["rate"] / 52
-        interest_portion = loan["remaining"] * Decimal(str(weekly_rate))
+        monthly_rate = loan["rate"] / 12
+        interest_portion = loan["remaining"] * Decimal(str(monthly_rate))
         principal_portion = amount - interest_portion
 
         loan["remaining"] -= principal_portion
-        loan["weeks_remaining"] -= 1
+        loan["months_remaining"] -= 1
 
         # Add to reserves
         self.state.reserves += amount
         self.state.wealth += interest_portion  # Profit
 
         # Check if loan is paid off
-        if loan["remaining"] <= 0 or loan["weeks_remaining"] <= 0:
+        if loan["remaining"] <= 0 or loan["months_remaining"] <= 0:
             del self.loans[borrower_id]
             self.state.total_loans -= loan["principal"]
 
