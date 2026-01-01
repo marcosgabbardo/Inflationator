@@ -10,10 +10,28 @@ Austrian Theory Relevance:
 """
 
 import asyncio
+import time
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import httpx
+
+
+# Global shared cache to avoid rate limiting across instances
+_GLOBAL_BTC_CACHE: Dict[str, Any] = {}
+_GLOBAL_BTC_CACHE_TIME: Optional[datetime] = None
+_GLOBAL_LAST_API_CALL: float = 0.0
+_API_CALL_DELAY: float = 2.0  # 2 seconds between API calls
+
+
+def _rate_limit_wait():
+    """Wait if needed to respect rate limits"""
+    global _GLOBAL_LAST_API_CALL
+    now = time.time()
+    elapsed = now - _GLOBAL_LAST_API_CALL
+    if elapsed < _API_CALL_DELAY:
+        time.sleep(_API_CALL_DELAY - elapsed)
+    _GLOBAL_LAST_API_CALL = time.time()
 
 
 class BitcoinCollector:
@@ -28,9 +46,7 @@ class BitcoinCollector:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
-        self._cache: Dict[str, Any] = {}
-        self._cache_time: Optional[datetime] = None
-        self._cache_ttl = timedelta(minutes=5)  # Cache for 5 minutes
+        self._cache_ttl = timedelta(minutes=10)  # Cache for 10 minutes
 
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers"""
@@ -42,10 +58,11 @@ class BitcoinCollector:
         return headers
 
     def _is_cache_valid(self) -> bool:
-        """Check if cache is still valid"""
-        if not self._cache_time:
+        """Check if global cache is still valid"""
+        global _GLOBAL_BTC_CACHE_TIME
+        if not _GLOBAL_BTC_CACHE_TIME:
             return False
-        return datetime.now() - self._cache_time < self._cache_ttl
+        return datetime.now() - _GLOBAL_BTC_CACHE_TIME < self._cache_ttl
 
     async def get_current_price(self) -> Dict[str, Decimal]:
         """
@@ -54,8 +71,14 @@ class BitcoinCollector:
         Returns:
             Dict with prices: {'usd': Decimal, 'eur': Decimal, ...}
         """
-        if self._is_cache_valid() and "price" in self._cache:
-            return self._cache["price"]
+        global _GLOBAL_BTC_CACHE, _GLOBAL_BTC_CACHE_TIME
+
+        # Use global cache to avoid rate limiting across instances
+        if self._is_cache_valid() and "price" in _GLOBAL_BTC_CACHE:
+            return _GLOBAL_BTC_CACHE["price"]
+
+        # Rate limit wait before API call
+        _rate_limit_wait()
 
         async with httpx.AsyncClient() as client:
             try:
@@ -84,15 +107,15 @@ class BitcoinCollector:
                     "market_cap_usd": Decimal(str(btc_data.get("usd_market_cap", 0))),
                 }
 
-                self._cache["price"] = prices
-                self._cache_time = datetime.now()
+                _GLOBAL_BTC_CACHE["price"] = prices
+                _GLOBAL_BTC_CACHE_TIME = datetime.now()
                 return prices
 
             except Exception as e:
                 print(f"Error fetching Bitcoin price: {e}")
                 # Return cached data if available
-                if "price" in self._cache:
-                    return self._cache["price"]
+                if "price" in _GLOBAL_BTC_CACHE:
+                    return _GLOBAL_BTC_CACHE["price"]
                 # Return mock data as fallback
                 return self._get_mock_price()
 
@@ -119,6 +142,15 @@ class BitcoinCollector:
         - Supply metrics
         - All-time high
         """
+        global _GLOBAL_BTC_CACHE, _GLOBAL_BTC_CACHE_TIME
+
+        # Use global cache
+        if self._is_cache_valid() and "market_data" in _GLOBAL_BTC_CACHE:
+            return _GLOBAL_BTC_CACHE["market_data"]
+
+        # Rate limit wait before API call
+        _rate_limit_wait()
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(
@@ -137,7 +169,7 @@ class BitcoinCollector:
 
                 market_data = data.get("market_data", {})
 
-                return {
+                result = {
                     "price_usd": Decimal(str(market_data.get("current_price", {}).get("usd", 0))),
                     "market_cap_usd": Decimal(str(market_data.get("market_cap", {}).get("usd", 0))),
                     "volume_24h_usd": Decimal(str(market_data.get("total_volume", {}).get("usd", 0))),
@@ -151,8 +183,15 @@ class BitcoinCollector:
                     "price_change_30d": market_data.get("price_change_percentage_30d", 0),
                 }
 
+                _GLOBAL_BTC_CACHE["market_data"] = result
+                _GLOBAL_BTC_CACHE_TIME = datetime.now()
+                return result
+
             except Exception as e:
                 print(f"Error fetching Bitcoin market data: {e}")
+                # Return cached data if available
+                if "market_data" in _GLOBAL_BTC_CACHE:
+                    return _GLOBAL_BTC_CACHE["market_data"]
                 return self._get_mock_market_data()
 
     def _get_mock_market_data(self) -> Dict[str, Any]:

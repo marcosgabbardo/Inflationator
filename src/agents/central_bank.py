@@ -664,25 +664,112 @@ class CentralBank(Agent):
 
     @classmethod
     def create_for_country(cls, country: str) -> "CentralBank":
-        """Create central bank for a specific country"""
+        """Create central bank for a specific country (20 countries supported)"""
+
+        # Central bank names for all 20 countries
         names = {
+            # Americas
             "USA": "Federal Reserve",
-            "EUR": "European Central Bank",
-            "GBR": "Bank of England",
-            "JPN": "Bank of Japan",
-            "CHN": "People's Bank of China",
+            "CAN": "Bank of Canada",
+            "MEX": "Banco de México",
             "BRA": "Banco Central do Brasil",
+            "ARG": "Banco Central de la República Argentina",
+
+            # Europe
+            "GBR": "Bank of England",
+            "DEU": "Deutsche Bundesbank",  # via ECB
+            "FRA": "Banque de France",     # via ECB
+            "SWE": "Sveriges Riksbank",
+            "NOR": "Norges Bank",
+            "CHE": "Swiss National Bank",
+            "LIE": "Swiss National Bank",  # Uses CHF
+
+            # Asia
+            "CHN": "People's Bank of China",
+            "JPN": "Bank of Japan",
+            "IND": "Reserve Bank of India",
+            "IDN": "Bank Indonesia",
+
+            # Middle East
+            "ARE": "Central Bank of UAE",
+            "SAU": "Saudi Central Bank (SAMA)",
+
+            # Eurasia
+            "RUS": "Central Bank of Russia",
+            "TUR": "Central Bank of the Republic of Turkey",
         }
 
+        # Base money supply in local currency (approximate)
         base_money = {
-            "USA": Decimal("6000000000000"),   # ~$6 trillion
-            "EUR": Decimal("7000000000000"),   # ~€7 trillion
-            "JPN": Decimal("700000000000000"), # ~¥700 trillion
+            # Americas (in USD or local)
+            "USA": Decimal("6000000000000"),     # ~$6T USD
+            "CAN": Decimal("300000000000"),      # ~$300B CAD
+            "MEX": Decimal("2500000000000"),     # ~2.5T MXN
+            "BRA": Decimal("500000000000"),      # ~500B BRL
+            "ARG": Decimal("10000000000000"),    # ~10T ARS (high due to inflation)
+
+            # Europe
+            "GBR": Decimal("1000000000000"),     # ~£1T
+            "DEU": Decimal("3000000000000"),     # ~€3T (Eurozone share)
+            "FRA": Decimal("2500000000000"),     # ~€2.5T (Eurozone share)
+            "SWE": Decimal("400000000000"),      # ~400B SEK
+            "NOR": Decimal("300000000000"),      # ~300B NOK
+            "CHE": Decimal("800000000000"),      # ~800B CHF
+            "LIE": Decimal("5000000000"),        # ~5B CHF (tiny)
+
+            # Asia
+            "CHN": Decimal("40000000000000"),    # ~40T CNY
+            "JPN": Decimal("700000000000000"),   # ~¥700T
+            "IND": Decimal("45000000000000"),    # ~45T INR
+            "IDN": Decimal("3000000000000000"),  # ~3000T IDR
+
+            # Middle East
+            "ARE": Decimal("500000000000"),      # ~500B AED
+            "SAU": Decimal("2000000000000"),     # ~2T SAR
+
+            # Eurasia
+            "RUS": Decimal("20000000000000"),    # ~20T RUB
+            "TUR": Decimal("5000000000000"),     # ~5T TRY
+        }
+
+        # Intervention levels by regime type (Hoppe hierarchy)
+        # MINARCHY: 0.25, MONARCHY: 0.30, DEMOCRACY_LIBERAL: 0.50
+        # DEMOCRACY_SOCIALIST: 0.65, TOTALITARIAN: 0.80
+        intervention_levels = {
+            # Low intervention (minarchy)
+            "CHE": 0.25,  # Switzerland - low intervention
+            "LIE": 0.20,  # Liechtenstein - minimal (uses CHF)
+
+            # Moderate-low (monarchy)
+            "ARE": 0.30,  # UAE - monarchy
+            "SAU": 0.30,  # Saudi Arabia - monarchy
+
+            # Moderate (liberal democracy)
+            "USA": 0.50,  # USA - liberal democracy
+            "JPN": 0.50,  # Japan - liberal democracy
+
+            # Moderate-high (socialist democracy)
+            "GBR": 0.65,  # UK - socialist democracy
+            "CAN": 0.65,  # Canada - socialist democracy
+            "MEX": 0.65,  # Mexico - socialist democracy
+            "BRA": 0.65,  # Brazil - socialist democracy
+            "ARG": 0.70,  # Argentina - high intervention history
+            "DEU": 0.60,  # Germany - via ECB, moderate
+            "FRA": 0.65,  # France - via ECB, higher
+            "SWE": 0.65,  # Sweden - socialist democracy
+            "NOR": 0.60,  # Norway - moderate, oil wealth
+            "IND": 0.65,  # India - socialist democracy
+            "IDN": 0.60,  # Indonesia - moderate
+
+            # High intervention (totalitarian)
+            "CHN": 0.80,  # China - totalitarian
+            "RUS": 0.75,  # Russia - totalitarian
+            "TUR": 0.80,  # Turkey - Erdogan's unorthodox policies
         }
 
         return cls(
             country=country,
             name=names.get(country, f"Central Bank of {country}"),
             initial_base_money=base_money.get(country, Decimal("1000000000000")),
-            intervention_level=0.5,  # Default moderate intervention
+            intervention_level=intervention_levels.get(country, 0.5),
         )

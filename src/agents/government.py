@@ -861,22 +861,46 @@ class Government(Agent):
     ) -> "Government":
         """Create government for a specific country"""
 
-        # Default regimes by country (approximate)
+        # Default regimes by country (based on Hoppe hierarchy)
+        # 20 countries for multi-country simulation
         default_regimes = {
+            # Americas
             "USA": RegimeType.DEMOCRACY_LIBERAL,
-            "GBR": RegimeType.DEMOCRACY_LIBERAL,
+            "CAN": RegimeType.DEMOCRACY_SOCIALIST,
+            "MEX": RegimeType.DEMOCRACY_SOCIALIST,
+            "BRA": RegimeType.DEMOCRACY_SOCIALIST,
+            "ARG": RegimeType.DEMOCRACY_SOCIALIST,
+
+            # Europe
+            "GBR": RegimeType.DEMOCRACY_SOCIALIST,
             "DEU": RegimeType.DEMOCRACY_SOCIALIST,
             "FRA": RegimeType.DEMOCRACY_SOCIALIST,
             "SWE": RegimeType.DEMOCRACY_SOCIALIST,
+            "NOR": RegimeType.DEMOCRACY_SOCIALIST,
+            "CHE": RegimeType.MINARCHY,    # Switzerland - low intervention
+            "LIE": RegimeType.MONARCHY,    # Liechtenstein - hereditary
+
+            # Asia
             "CHN": RegimeType.TOTALITARIAN,
+            "JPN": RegimeType.DEMOCRACY_LIBERAL,
+            "IND": RegimeType.DEMOCRACY_SOCIALIST,
+            "IDN": RegimeType.DEMOCRACY_SOCIALIST,
+
+            # Middle East
+            "SAU": RegimeType.MONARCHY,    # Saudi Arabia
+            "ARE": RegimeType.MONARCHY,    # UAE
+            "TUR": RegimeType.TOTALITARIAN,  # Erdogan autocracy
+
+            # Eurasia
             "RUS": RegimeType.TOTALITARIAN,
+
+            # Legacy entries (kept for backwards compatibility)
             "PRK": RegimeType.TOTALITARIAN,
             "VEN": RegimeType.TOTALITARIAN,
             "CUB": RegimeType.TOTALITARIAN,
-            "LIE": RegimeType.MONARCHY,  # Liechtenstein
-            "MCO": RegimeType.MONARCHY,  # Monaco
-            "SGP": RegimeType.MINARCHY,  # Close to minarchy
-            "HKG": RegimeType.MINARCHY,  # Was close to minarchy
+            "MCO": RegimeType.MONARCHY,
+            "SGP": RegimeType.MINARCHY,
+            "HKG": RegimeType.MINARCHY,
         }
 
         if regime_type is None:

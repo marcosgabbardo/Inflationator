@@ -25,6 +25,8 @@ from .collectors.market_sentiment import (
     get_market_indices,
     get_market_fear_level,
 )
+from .collectors.country_collector import CountryDataCollector
+from .collectors.forex import ForexCollector
 
 
 @dataclass
@@ -33,33 +35,55 @@ class EconomicConditions:
     Aggregated real-world economic conditions.
 
     Used to initialize the simulation with TODAY's economy.
+    Now supports country-specific data.
     """
 
-    # Asset prices
+    # Country identifier
+    country: str = "USA"
+    currency_code: str = "USD"
+
+    # Asset prices (global)
     btc_price_usd: Decimal = Decimal("50000")
     gold_price_usd: Decimal = Decimal("2000")
     silver_price_usd: Decimal = Decimal("25")
     oil_price_usd: Decimal = Decimal("80")
 
-    # Market indices
+    # Country-specific stock index (not just S&P 500)
+    stock_index_name: str = "S&P 500"
+    stock_index_value: float = 5000.0
+    stock_index_change_pct: float = 0.0
+
+    # US Market indices (global reference)
     sp500_value: float = 5000.0
     vix_value: float = 15.0
     dxy_value: float = 104.0
 
-    # Interest rates (market-derived)
-    treasury_10y: float = 4.5
-    treasury_2y: float = 4.8
+    # Country-specific exchange rate vs USD
+    fx_rate_vs_usd: float = 1.0
+    fx_change_30d_pct: float = 0.0
+
+    # Country-specific interest rate
+    local_interest_rate: float = 0.05
+    treasury_10y: float = 4.5  # US reference
+    treasury_2y: float = 4.8   # US reference
     yield_curve_inverted: bool = False
 
     # Sentiment
     market_fear_level: int = 50  # 0-100 (higher = more fear)
     crypto_fear_greed: int = 50  # 0-100 (higher = more greed)
     market_sentiment: str = "neutral"  # fear, neutral, greed
+    local_market_bullish: bool = True
 
     # Historical context
     inflation_estimate: float = 5.0  # Commodity-based, not CPI
+    local_inflation_estimate: float = 5.0  # Country-specific estimate
     dollar_debasement_10y: float = 50.0  # % vs gold/btc over 10 years
     volatility_ratio: float = 1.0  # Current vs average volatility
+    local_volatility: float = 15.0  # Country stock market volatility
+
+    # Historical economic data (10-year averages)
+    historical_gdp_growth: float = 2.0  # Average annual GDP growth
+    historical_unemployment: float = 7.0  # Average unemployment rate
 
     # Geopolitical
     geopolitical_risk_level: str = "moderate"  # low, moderate, high, extreme
@@ -76,24 +100,153 @@ class EconomicConditions:
 class RealWorldConditionsCollector:
     """
     Aggregates data from multiple sources to create realistic initial conditions.
+
+    Now supports country-specific data collection.
     """
+
+    # Stock index names per country
+    STOCK_INDEX_NAMES = {
+        "USA": "S&P 500",
+        "CAN": "S&P/TSX",
+        "MEX": "IPC Mexico",
+        "BRA": "Bovespa",
+        "ARG": "Merval",
+        "GBR": "FTSE 100",
+        "DEU": "DAX",
+        "FRA": "CAC 40",
+        "SWE": "OMX Stockholm",
+        "NOR": "Oslo All Share",
+        "CHE": "SMI",
+        "LIE": "SMI (CH)",
+        "CHN": "Shanghai Composite",
+        "JPN": "Nikkei 225",
+        "IND": "BSE Sensex",
+        "IDN": "Jakarta Composite",
+        "ARE": "Dubai Financial",
+        "SAU": "Tadawul",
+        "RUS": "MOEX Russia",
+        "TUR": "BIST 100",
+    }
+
+    # Estimated local inflation rates (Austrian estimate, not CPI)
+    LOCAL_INFLATION_ESTIMATES = {
+        "USA": 8.0,   # Real inflation higher than CPI claims
+        "CAN": 6.0,
+        "MEX": 12.0,
+        "BRA": 15.0,
+        "ARG": 150.0,  # Hyperinflation
+        "GBR": 7.0,
+        "DEU": 5.0,
+        "FRA": 5.5,
+        "SWE": 6.0,
+        "NOR": 4.0,
+        "CHE": 2.0,   # Low intervention = low inflation
+        "LIE": 2.0,
+        "CHN": 8.0,
+        "JPN": 3.0,   # Deflation history
+        "IND": 10.0,
+        "IDN": 8.0,
+        "ARE": 4.0,
+        "SAU": 4.0,
+        "RUS": 20.0,  # Sanctions effect
+        "TUR": 80.0,  # Erdogan policy
+    }
+
+    # Historical average GDP growth rates (10-year average, real terms)
+    HISTORICAL_GDP_GROWTH = {
+        "USA": 2.3,    # Slow but steady
+        "CAN": 1.8,
+        "MEX": 1.5,    # Stagnant
+        "BRA": 0.5,    # Lost decade
+        "ARG": -1.0,   # Negative growth (intervention damage)
+        "GBR": 1.5,
+        "DEU": 1.2,
+        "FRA": 1.0,
+        "SWE": 2.0,
+        "NOR": 1.5,
+        "CHE": 1.8,    # Stable growth despite low intervention
+        "LIE": 2.5,    # High growth (low intervention)
+        "CHN": 5.5,    # Slowing from previous highs
+        "JPN": 0.8,    # Stagnation
+        "IND": 6.0,    # Strong growth
+        "IDN": 5.0,
+        "ARE": 3.5,    # Oil-driven
+        "SAU": 2.0,    # Oil-dependent
+        "RUS": 1.0,    # Sanctions impact
+        "TUR": 3.0,    # Volatile but growing
+    }
+
+    # Historical unemployment rates (baseline, not government manipulated)
+    # Austrian estimate: real unemployment is higher than official stats
+    HISTORICAL_UNEMPLOYMENT = {
+        "USA": 7.0,    # Real: higher than official 4%
+        "CAN": 7.5,
+        "MEX": 8.0,
+        "BRA": 12.0,   # High structural unemployment
+        "ARG": 15.0,   # Very high
+        "GBR": 6.0,
+        "DEU": 5.5,
+        "FRA": 9.0,    # High due to regulations
+        "SWE": 8.0,
+        "NOR": 4.5,    # Low (oil wealth)
+        "CHE": 3.5,    # Very low (minarchy works)
+        "LIE": 2.0,    # Lowest (monarchy + low intervention)
+        "CHN": 8.0,    # Hidden unemployment
+        "JPN": 4.0,    # Low but underemployment
+        "IND": 10.0,   # High informal economy
+        "IDN": 7.0,
+        "ARE": 3.0,    # Low (oil + migrant workers)
+        "SAU": 12.0,   # High among nationals
+        "RUS": 8.0,
+        "TUR": 12.0,   # High and volatile
+    }
 
     def __init__(self, country: str = "USA"):
         self.country = country
         self.btc_collector = BitcoinCollector()
         self.commodities_collector = CommoditiesCollector()
         self.sentiment_collector = MarketSentimentCollector()
+        self.country_collector = CountryDataCollector(country)
+        self.forex_collector = ForexCollector()
 
     async def fetch_all_conditions(self) -> EconomicConditions:
         """
         Fetch all real-world conditions in parallel.
 
+        Now includes country-specific data for non-US countries.
+
         Returns:
             EconomicConditions with current market state
         """
         conditions = EconomicConditions()
+        conditions.country = self.country
+        conditions.currency_code = self.country_collector.currency_code
 
-        # Fetch in parallel where possible
+        # Fetch country-specific data first
+        try:
+            country_data = self.country_collector.get_country_conditions()
+            conditions.stock_index_name = self.STOCK_INDEX_NAMES.get(self.country, "Stock Index")
+            conditions.stock_index_value = float(country_data.stock_index_value)
+            conditions.stock_index_change_pct = country_data.stock_index_change_pct
+            conditions.fx_rate_vs_usd = float(country_data.fx_rate_vs_usd)
+            conditions.fx_change_30d_pct = country_data.fx_change_30d_pct
+            conditions.local_interest_rate = country_data.implied_rate
+            conditions.local_volatility = country_data.market_volatility
+            conditions.local_market_bullish = country_data.is_bullish
+            conditions.local_inflation_estimate = self.LOCAL_INFLATION_ESTIMATES.get(
+                self.country, 5.0
+            )
+            # Add historical data
+            conditions.historical_gdp_growth = self.HISTORICAL_GDP_GROWTH.get(
+                self.country, 2.0
+            )
+            conditions.historical_unemployment = self.HISTORICAL_UNEMPLOYMENT.get(
+                self.country, 7.0
+            )
+        except Exception as e:
+            print(f"Error fetching country-specific data for {self.country}: {e}")
+
+        # Fetch global data (BTC, commodities)
         try:
             # Async fetches
             btc_task = self.btc_collector.get_current_price()
@@ -532,19 +685,41 @@ def get_simulation_initial_state(country: str = "USA") -> Dict[str, Any]:
 
 
 def print_conditions_summary(conditions: EconomicConditions):
-    """Print a summary of current conditions."""
+    """Print a summary of current conditions (now country-aware)."""
+    country = conditions.country
+    is_usa = country == "USA"
+
     print("\n" + "=" * 50)
-    print("REAL WORLD CONDITIONS - TODAY'S ECONOMY")
+    if is_usa:
+        print("REAL WORLD CONDITIONS - TODAY'S ECONOMY")
+    else:
+        print(f"REAL WORLD CONDITIONS - {country}")
     print("=" * 50)
 
-    print(f"\n{'ASSET PRICES':^50}")
+    print(f"\n{'ASSET PRICES (Global)':^50}")
     print("-" * 50)
     print(f"  Bitcoin:  ${conditions.btc_price_usd:,.0f}")
     print(f"  Gold:     ${conditions.gold_price_usd:,.0f}")
     print(f"  Silver:   ${conditions.silver_price_usd:,.0f}")
     print(f"  Oil:      ${conditions.oil_price_usd:,.0f}")
 
-    print(f"\n{'MARKET INDICES':^50}")
+    # Show country-specific stock index
+    print(f"\n{f'{country} MARKET':^50}")
+    print("-" * 50)
+    print(f"  {conditions.stock_index_name}:  {conditions.stock_index_value:,.0f}")
+    print(f"  30-Day Change:  {conditions.stock_index_change_pct:+.1f}%")
+    print(f"  Market Trend:   {'BULLISH' if conditions.local_market_bullish else 'BEARISH'}")
+    print(f"  Volatility:     {conditions.local_volatility:.1f}%")
+
+    # Show currency info for non-USD countries
+    if not is_usa:
+        print(f"\n{f'{conditions.currency_code} CURRENCY':^50}")
+        print("-" * 50)
+        print(f"  Rate vs USD:    {conditions.fx_rate_vs_usd:.4f}")
+        print(f"  30-Day Change:  {conditions.fx_change_30d_pct:+.1f}%")
+
+    # Show global reference indices
+    print(f"\n{'GLOBAL REFERENCE':^50}")
     print("-" * 50)
     print(f"  S&P 500:  {conditions.sp500_value:,.0f}")
     print(f"  VIX:      {conditions.vix_value:.1f}")
@@ -552,25 +727,26 @@ def print_conditions_summary(conditions: EconomicConditions):
 
     print(f"\n{'INTEREST RATES':^50}")
     print("-" * 50)
-    print(f"  10Y Treasury:  {conditions.treasury_10y:.2f}%")
-    print(f"  2Y Treasury:   {conditions.treasury_2y:.2f}%")
-    print(f"  Yield Curve:   {'INVERTED' if conditions.yield_curve_inverted else 'Normal'}")
+    print(f"  {country} Rate:     {conditions.local_interest_rate:.2%}")
+    print(f"  US 10Y Treasury:  {conditions.treasury_10y:.2f}%")
+    print(f"  Yield Curve:      {'INVERTED' if conditions.yield_curve_inverted else 'Normal'}")
 
     print(f"\n{'SENTIMENT':^50}")
     print("-" * 50)
     print(f"  Market Fear Level:    {conditions.market_fear_level}/100 ({conditions.market_sentiment})")
     print(f"  Crypto Fear & Greed:  {conditions.crypto_fear_greed}/100")
 
-    print(f"\n{'DERIVED METRICS':^50}")
+    print(f"\n{'INFLATION ESTIMATES':^50}")
     print("-" * 50)
-    print(f"  Real Inflation Est:   {conditions.inflation_estimate:.1f}% (commodity-based)")
-    print(f"  Dollar Debasement:    {conditions.dollar_debasement_10y:.1f}% (10 years)")
+    print(f"  {country} Real Inflation: {conditions.local_inflation_estimate:.1f}% (Austrian estimate)")
+    print(f"  Global (commodity):     {conditions.inflation_estimate:.1f}%")
+    print(f"  Dollar Debasement:      {conditions.dollar_debasement_10y:.1f}% (10 years)")
+
+    print(f"\n{'MACRO INDICATORS':^50}")
+    print("-" * 50)
     print(f"  Recession Prob:       {conditions.recession_probability:.0%}")
     print(f"  Monetary Policy:      {conditions.monetary_expansion_signal}")
-
-    print(f"\n{'GEOPOLITICAL':^50}")
-    print("-" * 50)
-    print(f"  Risk Level:           {conditions.geopolitical_risk_level}")
+    print(f"  Geopolitical Risk:    {conditions.geopolitical_risk_level}")
     print(f"  Trade Tensions:       {conditions.trade_tensions:.0%}")
 
     print(f"\n  Data fetched at: {conditions.fetched_at.strftime('%Y-%m-%d %H:%M:%S')}")

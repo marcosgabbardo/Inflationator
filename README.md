@@ -132,6 +132,115 @@ python -m src.cli.main regimes
 python -m src.cli.main init-db
 ```
 
+## Multi-Country Simulation (NEW!)
+
+Simulate 20 countries competing and influencing each other economically and geopolitically.
+
+### Available Countries
+
+| Code | Country | Regime | Intervention |
+|------|---------|--------|--------------|
+| USA | United States | Democracy Liberal | 50% |
+| CHN | China | Totalitarian | 80% |
+| BRA | Brazil | Democracy Socialist | 65% |
+| ARG | Argentina | Democracy Socialist | 70% |
+| RUS | Russia | Totalitarian | 75% |
+| TUR | Turkey | Totalitarian | 80% |
+| JPN | Japan | Democracy Liberal | 50% |
+| DEU | Germany | Democracy Socialist | 60% |
+| GBR | United Kingdom | Democracy Socialist | 65% |
+| CHE | Switzerland | Minarchy | 25% |
+| LIE | Liechtenstein | Monarchy | 20% |
+| SAU | Saudi Arabia | Monarchy | 30% |
+| ARE | UAE | Monarchy | 30% |
+| IND | India | Democracy Socialist | 65% |
+| CAN | Canada | Democracy Socialist | 65% |
+| MEX | Mexico | Democracy Socialist | 65% |
+| FRA | France | Democracy Socialist | 65% |
+| SWE | Sweden | Democracy Socialist | 65% |
+| NOR | Norway | Democracy Socialist | 60% |
+| IDN | Indonesia | Democracy Socialist | 60% |
+
+### 8. List Available Countries
+
+```bash
+python -m src.cli.main countries
+```
+
+### 9. Run Multi-Country Simulation
+
+```bash
+# Simulate 5 countries for 12 months
+python -m src.cli.main run-multi --countries USA,CHN,BRA,JPN,DEU --months 12
+
+# Simulate rival pairs
+python -m src.cli.main run-multi --countries USA,RUS,CHN,TUR --months 6
+
+# Compare low vs high intervention countries
+python -m src.cli.main run-multi --countries CHE,LIE,SAU,USA,ARG,TUR --months 12
+```
+
+### 10. View Country Relations
+
+```bash
+# View relationship between two countries
+python -m src.cli.main relations USA CHN
+python -m src.cli.main relations BRA ARG
+python -m src.cli.main relations USA RUS
+```
+
+Shows:
+- Relationship type (ALLY, NEUTRAL, RIVAL, ENEMY)
+- Trade volume
+- Active tensions and sanctions
+- War probability and risk assessment
+
+### 11. View War Risks
+
+```bash
+# Show all high war-risk country pairs (>3% probability)
+python -m src.cli.main war-risks
+```
+
+### 12. Compare Countries
+
+```bash
+# Compare countries and rank by freedom index
+python -m src.cli.main compare-countries USA,CHE,BRA,CHN,TUR --months 6
+```
+
+## Geopolitical Features
+
+### War Probability Calculation
+
+Factors that INCREASE war probability:
+- Historical conflicts
+- Territorial disputes
+- Ideological differences (regime type)
+- Active sanctions
+- Nationalist governments
+
+Factors that DECREASE war probability:
+- Trade interdependence ("Peace through commerce")
+- Alliance with nuclear powers (MAD)
+- Mutual economic dependency
+- Democratic peace theory (democracies rarely fight each other)
+
+### Relationships
+
+- **ALLY**: Positive relationship, low conflict risk (e.g., USA-GBR, CHE-LIE)
+- **NEUTRAL**: No strong ties either way (e.g., USA-BRA)
+- **RIVAL**: Competitive, moderate conflict risk (e.g., CHN-JPN, BRA-ARG)
+- **ENEMY**: Hostile, high conflict risk (e.g., USA-RUS)
+
+### Influence System
+
+Countries influence each other through:
+- **Trade**: Prices flow through trade channels
+- **Monetary**: Central bank policy spills over (especially USD)
+- **Commodity**: Producer price changes affect importers
+- **Crisis**: Problems spread through connected markets
+
 ## Project Structure
 
 ```
@@ -142,8 +251,18 @@ inflationator/
 │   │   ├── person.py        # Individual persons
 │   │   ├── company.py       # Companies
 │   │   ├── bank.py          # Private banks
-│   │   ├── central_bank.py  # Central Bank (villain)
-│   │   └── government.py    # Government (villain)
+│   │   ├── central_bank.py  # Central Bank (villain) - 20 CBs
+│   │   └── government.py    # Government (villain) - 6 regime types
+│   │
+│   ├── countries/           # Multi-country configuration (NEW!)
+│   │   ├── base.py          # CountryConfig dataclass
+│   │   ├── registry.py      # 20 countries configured
+│   │   └── configs/         # Per-country customizations
+│   │
+│   ├── geopolitics/         # International relations (NEW!)
+│   │   ├── relationships.py # Bilateral relationships
+│   │   ├── war_probability.py  # War risk calculator
+│   │   └── influence.py     # Economic influence system
 │   │
 │   ├── economy/             # Economic system
 │   │   ├── market.py        # Markets and price discovery
@@ -156,17 +275,19 @@ inflationator/
 │   │   └── collectors/
 │   │       ├── bitcoin.py        # CoinGecko API
 │   │       ├── commodities.py    # Yahoo Finance
-│   │       └── market_sentiment.py  # Indices, VIX, yields
+│   │       ├── market_sentiment.py  # Indices, VIX, yields
+│   │       ├── forex.py          # Exchange rates (NEW!)
+│   │       └── country_collector.py  # Per-country data (NEW!)
 │   │
 │   ├── simulation/          # Simulation engine
-│   │   └── engine.py        # Main loop
+│   │   └── engine.py        # Main loop + MultiCountryEngine (NEW!)
 │   │
 │   ├── database/            # Persistence (optional)
 │   │   ├── connection.py    # MySQL connection
 │   │   └── models.py        # SQLAlchemy models
 │   │
 │   └── cli/                 # Interface
-│       └── main.py          # Typer commands
+│       └── main.py          # Typer commands (incl. multi-country)
 │
 ├── config/
 │   └── settings.py          # Configuration

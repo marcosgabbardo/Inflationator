@@ -93,13 +93,16 @@ class SimulationMetrics:
 class SimulationConfig:
     """Configuration for a simulation run"""
     country: str = "USA"
-    num_persons: int = 100_000
-    num_companies: int = 10_000
+    num_persons: int = 100_000  # 100k persons default
+    num_companies: int = 10_000  # 10k companies default
     num_banks: int = 500
     regime_type: RegimeType = RegimeType.DEMOCRACY_LIBERAL
     central_bank_intervention: float = 0.5
     ticks_per_run: int = 12  # 1 year by default (12 months instead of 52 weeks)
     use_real_data: bool = True
+    # Historical data (set from RealWorldConditionsCollector)
+    historical_gdp_growth: float = 2.0  # 10-year average GDP growth %
+    historical_unemployment: float = 7.0  # Austrian estimate (includes underemployment)
 
 
 class SimulationEngine:
@@ -297,6 +300,10 @@ class SimulationEngine:
                     "geopolitical_risk": self.real_conditions.geopolitical_risk_level,
                 }
 
+                # Update config with historical data from real conditions
+                self.config.historical_gdp_growth = self.real_conditions.historical_gdp_growth
+                self.config.historical_unemployment = self.real_conditions.historical_unemployment
+
                 # Print summary
                 print_conditions_summary(self.real_conditions)
 
@@ -460,11 +467,16 @@ class SimulationEngine:
                 regulation_by_regime.get(self.government.regime_type, 0.3)
             )
 
-        # Initialize employment
+        # Initialize employment with historical unemployment rate
+        # Convert historical unemployment (%) to employment rate (1 - unemployment)
+        # Historical unemployment already reflects Austrian analysis (includes underemployment)
+        historical_unemployment_rate = self.config.historical_unemployment / 100
+        initial_employment = max(0.5, min(0.95, 1 - historical_unemployment_rate))
+
         result = self.labor_market.initialize_employment(
             persons=self.persons,
             companies=self.companies,
-            initial_employment_rate=0.85  # Start with 85% employed
+            initial_employment_rate=initial_employment
         )
 
         print(f"Labor Market Initialized:")
@@ -591,10 +603,11 @@ class SimulationEngine:
         if self.on_tick_complete:
             self.on_tick_complete(self.metrics)
 
-        # Progress indicator
-        if self.current_tick % 10 == 0:
-            print(f"  Month {self.current_tick}: Inflation={self.metrics.inflation_rate:.2%}, "
-                  f"BTC=${self.metrics.bitcoin_price}")
+        # Progress indicator (only for single-country runs, multi-country has its own)
+        # Suppress if running as part of multi-country simulation
+        if not hasattr(self, '_multi_country_mode') and self.current_tick % 6 == 0:
+            print(f"  Month {self.current_tick}: Inflation={self.metrics.inflation_rate:.1%} (annualized), "
+                  f"BTC=${self.metrics.bitcoin_price:,.0f}")
 
     def _build_world_state(self) -> Dict[str, Any]:
         """Build the world state that agents use for decisions"""
@@ -629,7 +642,9 @@ class SimulationEngine:
             "avg_time_preference": 0.5,
             "gdp": float(self.metrics.gdp),
             "failing_banks": [],
-            "gdp_growth": 0.02,
+            # Use historical GDP growth rate from real-world data
+            "gdp_growth": self.config.historical_gdp_growth / 100,  # Convert % to decimal
+            "historical_unemployment": self.config.historical_unemployment / 100,
             "material_costs": 50,
         }
 
@@ -1006,7 +1021,10 @@ class SimulationEngine:
         # Dampen money growth rate to monthly equivalent
         # CB prints money gradually, not all at once
         # For realistic inflation: 2-5% annual = 0.17-0.42% monthly
-        monthly_money_effect = money_growth_rate * 0.08  # 8% of growth affects prices per month
+        # More conservative: only 3% of money growth affects prices per month
+        monthly_money_effect = money_growth_rate * 0.03  # 3% of growth affects prices per month
+        # Cap the effect to prevent runaway inflation in early ticks
+        monthly_money_effect = max(-0.02, min(0.02, monthly_money_effect))  # ±2% max per month
 
         for market in self.market_manager.markets.values():
             old_price = market.current_price
@@ -1019,14 +1037,22 @@ class SimulationEngine:
                 # Hard assets: amplified effect (people flee to safety)
 
                 if market.market_type == MarketType.CRYPTO:
-                    # Bitcoin: LOVES QE - people flee fiat
-                    # Realistic: ~30-50% annual appreciation during heavy QE
+                    # Bitcoin: Benefits from QE but NOT exponentially
+                    # Realistic annual returns:
+                    # - Bull market (QE): +30-50% annually = +2-4% monthly
+                    # - Normal: +10-20% annually = +0.8-1.5% monthly
+                    # - Bear (QT): -20-40% annually
                     if qe_active:
-                        # During QE, BTC outperforms but moderately
-                        btc_multiplier = 1.2 + random.gauss(0, 0.2)  # 1.2x base + volatility
-                        price_factor = Decimal(str(1 + monthly_money_effect * btc_multiplier))
+                        # During QE, BTC appreciates but realistically
+                        # ~3% monthly max = ~42% annual (compounded)
+                        btc_monthly = 0.025 + random.gauss(0, 0.015)  # 2.5% base ± 1.5%
+                        btc_monthly = max(-0.05, min(0.04, btc_monthly))  # Cap at ±4-5%
+                        price_factor = Decimal(str(1 + btc_monthly))
                     else:
-                        price_factor = Decimal(str(1 + monthly_money_effect * 0.5))
+                        # Normal growth: ~1% monthly = ~12% annual
+                        btc_monthly = 0.01 + random.gauss(0, 0.02)
+                        btc_monthly = max(-0.03, min(0.03, btc_monthly))
+                        price_factor = Decimal(str(1 + btc_monthly))
 
                 elif market.market_type == MarketType.COMMODITIES:
                     # Gold/Silver: Also benefit from QE (traditional safe haven)
@@ -1456,3 +1482,493 @@ class SimulationEngine:
             },
             "labor_market": self.labor_market.get_statistics(),
         }
+
+
+# ===========================================
+# MULTI-COUNTRY SIMULATION ENGINE
+# ===========================================
+
+@dataclass
+class MultiCountryConfig:
+    """Configuration for multi-country simulation"""
+    countries: List[str] = field(default_factory=lambda: ["USA"])
+    base_num_persons: int = 100_000  # USA baseline, others scaled by GDP
+    base_num_companies: int = 10_000
+    base_num_banks: int = 500
+    ticks_per_run: int = 12  # 1 year
+    use_real_data: bool = True
+    scale_by_gdp: bool = True  # Scale agent count by GDP
+
+
+@dataclass
+class MultiCountryMetrics:
+    """Metrics for multi-country simulation"""
+    tick: int = 0
+    country_metrics: Dict[str, SimulationMetrics] = field(default_factory=dict)
+    global_metrics: Dict[str, Any] = field(default_factory=dict)
+    war_risks: List[Dict[str, Any]] = field(default_factory=list)
+    influence_effects: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "tick": self.tick,
+            "countries": {k: v.to_dict() for k, v in self.country_metrics.items()},
+            "global": self.global_metrics,
+            "war_risks": self.war_risks,
+            "influence_effects": self.influence_effects,
+        }
+
+
+class MultiCountrySimulationEngine:
+    """
+    Multi-country simulation engine.
+
+    Orchestrates multiple country simulations with:
+    - Geopolitical relationships
+    - Trade flows and tariffs
+    - Monetary influence transmission
+    - War probability tracking
+    - Crisis contagion
+
+    Austrian Theory Application:
+    - Trade creates interdependence (peace through commerce)
+    - Monetary policy spills over internationally
+    - Government interventions affect trading partners
+    - Wars destroy capital and increase state power
+    """
+
+    def __init__(self, config: Optional[MultiCountryConfig] = None):
+        from src.countries.registry import get_country_config, get_all_countries
+        from src.geopolitics.relationships import RelationshipManager
+        from src.geopolitics.war_probability import WarProbabilityCalculator
+        from src.geopolitics.influence import InfluenceCalculator
+        from src.data.collectors.country_collector import MultiCountryCollector
+
+        self.config = config or MultiCountryConfig()
+        self.state = SimulationState.IDLE
+        self.current_tick = 0
+
+        # Country engines (one per country)
+        self.country_engines: Dict[str, SimulationEngine] = {}
+
+        # Geopolitics
+        self.relationship_manager = RelationshipManager()
+        self.war_calculator = WarProbabilityCalculator()
+        self.influence_calculator = InfluenceCalculator()
+
+        # Data collectors
+        self.data_collector = MultiCountryCollector(self.config.countries)
+
+        # Metrics
+        self.metrics = MultiCountryMetrics()
+        self.metrics_history: List[MultiCountryMetrics] = []
+
+        # Country configs
+        self._country_configs: Dict[str, Any] = {}
+        for country in self.config.countries:
+            try:
+                self._country_configs[country] = get_country_config(country)
+            except Exception:
+                pass
+
+    def initialize(self):
+        """Initialize all country simulations"""
+        from src.countries.registry import get_country_config
+        from src.data.real_world_conditions import RealWorldConditionsCollector
+
+        print(f"Initializing multi-country simulation for {len(self.config.countries)} countries...")
+
+        for country in self.config.countries:
+            print(f"\n--- Initializing {country} ---")
+
+            # Get country config for regime and scale
+            country_config = self._country_configs.get(country)
+
+            # Get historical data for this country
+            conditions_collector = RealWorldConditionsCollector(country)
+            historical_gdp_growth = conditions_collector.HISTORICAL_GDP_GROWTH.get(country, 2.0)
+            historical_unemployment = conditions_collector.HISTORICAL_UNEMPLOYMENT.get(country, 7.0)
+
+            # Calculate scale based on GDP (USA = 1.0)
+            if self.config.scale_by_gdp and country_config:
+                usa_gdp = Decimal("27000000000000")  # $27T
+                country_gdp = country_config.gdp_nominal_usd
+                scale = float(country_gdp / usa_gdp)
+                scale = max(0.1, min(1.0, scale))  # Clamp between 10% and 100%
+            else:
+                scale = 1.0
+
+            # Create simulation config for this country with historical data
+            sim_config = SimulationConfig(
+                country=country,
+                num_persons=int(self.config.base_num_persons * scale),
+                num_companies=int(self.config.base_num_companies * scale),
+                num_banks=max(10, int(self.config.base_num_banks * scale)),
+                regime_type=country_config.regime_type if country_config else RegimeType.DEMOCRACY_LIBERAL,
+                central_bank_intervention=country_config.intervention_level if country_config else 0.5,
+                ticks_per_run=self.config.ticks_per_run,
+                use_real_data=self.config.use_real_data,
+                historical_gdp_growth=historical_gdp_growth,
+                historical_unemployment=historical_unemployment,
+            )
+
+            # Create and initialize engine
+            engine = SimulationEngine(sim_config)
+            engine._multi_country_mode = True  # Suppress individual progress output
+            engine.initialize()
+            self.country_engines[country] = engine
+
+            # Print historical data used
+            print(f"  Historical GDP Growth: {historical_gdp_growth:.1f}%")
+            print(f"  Historical Unemployment: {historical_unemployment:.1f}%")
+
+        print(f"\nMulti-country simulation initialized with {len(self.country_engines)} countries")
+        self.state = SimulationState.IDLE
+
+    def run(self, ticks: Optional[int] = None) -> List[MultiCountryMetrics]:
+        """
+        Run multi-country simulation.
+
+        Each tick:
+        1. Calculate inter-country influences
+        2. Run each country's simulation step
+        3. Apply cross-border effects
+        4. Update war probabilities
+        5. Track global metrics
+        """
+        ticks = ticks or self.config.ticks_per_run
+        self.state = SimulationState.RUNNING
+
+        print(f"\nRunning multi-country simulation for {ticks} months...")
+
+        for _ in range(ticks):
+            if self.state != SimulationState.RUNNING:
+                break
+
+            self._run_tick()
+            self.current_tick += 1
+
+        self.state = SimulationState.COMPLETED
+        return self.metrics_history
+
+    def _run_tick(self):
+        """Execute one multi-country simulation tick"""
+        # 1. Calculate influence matrix
+        influence_effects = self._calculate_influences()
+
+        # 2. Run each country's tick with influences applied
+        for country, engine in self.country_engines.items():
+            # Apply external influences to world state
+            world_state = engine._build_world_state()
+            world_state["external_influences"] = influence_effects.get(country, {})
+
+            # Sync tick counter with multi-country engine
+            engine.current_tick = self.current_tick
+
+            # Run the tick
+            engine._run_tick()
+
+        # 3. Process international trade
+        self._process_international_trade()
+
+        # 4. Update war probabilities
+        war_risks = self._update_war_probabilities()
+
+        # 5. Apply crisis contagion if any country in crisis
+        self._check_crisis_contagion()
+
+        # 6. Update metrics
+        self._update_metrics(war_risks, influence_effects)
+
+        # Progress indicator
+        if self.current_tick % 3 == 0:
+            self._print_progress()
+
+    def _calculate_influences(self) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate how each country influences others this tick.
+
+        Returns:
+            Dict[target_country][influence_type] = magnitude
+        """
+        influences: Dict[str, Dict[str, float]] = {c: {} for c in self.config.countries}
+
+        # Get relationships for influence calculation
+        relationships = {}
+        for country_a in self.config.countries:
+            for country_b in self.config.countries:
+                if country_a != country_b:
+                    rel = self.relationship_manager.get_relationship(country_a, country_b)
+                    if rel:
+                        relationships[(country_a, country_b)] = rel
+
+        # Calculate influence matrix
+        matrix = self.influence_calculator.calculate_influence_matrix(
+            self.config.countries,
+            relationships
+        )
+
+        # Convert to per-country influences
+        for target in self.config.countries:
+            total_influence = 0.0
+            for source in self.config.countries:
+                if source != target:
+                    total_influence += matrix.get(source, {}).get(target, 0.0)
+            influences[target]["total_external"] = total_influence
+
+        return influences
+
+    def _process_international_trade(self):
+        """
+        Process trade between countries.
+
+        Austrian insight:
+        - Free trade benefits all parties
+        - Tariffs harm consumers
+        - Sanctions disrupt markets
+        """
+        # For each country pair with trade
+        for country_a in self.config.countries:
+            for country_b in self.config.countries:
+                if country_a >= country_b:  # Avoid double processing
+                    continue
+
+                rel = self.relationship_manager.get_relationship(country_a, country_b)
+                if not rel:
+                    continue
+
+                # Apply tariff effects
+                if rel.tariff_a_to_b > 0 or rel.tariff_b_to_a > 0:
+                    # Tariffs reduce trade and raise prices
+                    avg_tariff = (rel.tariff_a_to_b + rel.tariff_b_to_a) / 2
+
+                    # Reduce trade volume by tariff effect
+                    trade_reduction = 1 - (avg_tariff * 0.5)  # 50% tariff = 25% trade reduction
+                    rel.trade_volume_usd *= Decimal(str(trade_reduction))
+
+                    # Track damage in both governments
+                    engine_a = self.country_engines.get(country_a)
+                    engine_b = self.country_engines.get(country_b)
+
+                    if engine_a and engine_a.government:
+                        engine_a.government.state.trade_disruption += rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+                    if engine_b and engine_b.government:
+                        engine_b.government.state.trade_disruption += rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+
+                # Sanctions effect
+                if rel.has_active_sanctions:
+                    # Severe trade reduction
+                    rel.trade_volume_usd *= Decimal("0.95")  # 5% reduction per tick
+
+    def _update_war_probabilities(self) -> List[Dict[str, Any]]:
+        """
+        Update war probabilities for all country pairs.
+
+        Returns list of high-risk pairs for display.
+        """
+        high_risk = []
+        seen = set()
+
+        for country_a in self.config.countries:
+            for country_b in self.config.countries:
+                if country_a >= country_b:
+                    continue
+
+                pair = tuple(sorted([country_a, country_b]))
+                if pair in seen:
+                    continue
+                seen.add(pair)
+
+                rel = self.relationship_manager.get_relationship(country_a, country_b)
+                if not rel:
+                    continue
+
+                # Recalculate war probability
+                assessment = self.war_calculator.calculate_war_probability(rel)
+
+                # Update relationship
+                rel.war_probability = assessment.probability
+
+                # Track high risk pairs
+                if assessment.probability >= 0.03:  # 3%+
+                    high_risk.append({
+                        "countries": [country_a, country_b],
+                        "probability": assessment.probability,
+                        "risk_level": assessment.risk_level,
+                        "triggers": [t.value for t in assessment.primary_triggers[:2]],
+                    })
+
+        return sorted(high_risk, key=lambda x: x["probability"], reverse=True)
+
+    def _check_crisis_contagion(self):
+        """
+        Check if any country is in crisis and propagate effects.
+
+        Austrian insight:
+        - Crises spread through interconnected markets
+        - Bailouts create moral hazard
+        - Sound money countries more resilient
+        """
+        for country, engine in self.country_engines.items():
+            # Check for crisis conditions
+            is_crisis = False
+
+            if engine.metrics.inflation_rate > 0.5:  # 50%+ inflation
+                is_crisis = True
+            if engine.metrics.unemployment_rate > 0.2:  # 20%+ unemployment
+                is_crisis = True
+
+            if is_crisis:
+                # Propagate crisis to connected countries
+                relationships = {}
+                for other in self.config.countries:
+                    if other != country:
+                        rel = self.relationship_manager.get_relationship(country, other)
+                        if rel:
+                            relationships[(country, other)] = rel
+
+                # Simulate shock propagation
+                impacts = self.influence_calculator.simulate_shock_propagation(
+                    source=country,
+                    shock_magnitude=0.5,  # 50% crisis
+                    countries=self.config.countries,
+                    relationships=relationships,
+                )
+
+                # Apply impacts to other countries
+                for target, impact in impacts.items():
+                    if target != country and impact > 0.05:  # 5%+ impact
+                        target_engine = self.country_engines.get(target)
+                        if target_engine:
+                            # Increase fear/time preference
+                            for person in target_engine.persons[:100]:
+                                person.time_preference = min(0.9, person.time_preference + impact * 0.1)
+
+    def _update_metrics(
+        self,
+        war_risks: List[Dict[str, Any]],
+        influences: Dict[str, Dict[str, float]]
+    ):
+        """Update multi-country metrics"""
+        self.metrics.tick = self.current_tick
+        self.metrics.war_risks = war_risks
+
+        # Collect metrics from each country
+        for country, engine in self.country_engines.items():
+            self.metrics.country_metrics[country] = engine.metrics
+
+        # Calculate global metrics
+        total_gdp = sum(e.metrics.gdp for e in self.country_engines.values())
+        avg_inflation = sum(e.metrics.inflation_rate for e in self.country_engines.values()) / len(self.country_engines)
+        avg_freedom = sum(e.metrics.freedom_index for e in self.country_engines.values()) / len(self.country_engines)
+        total_cb_damage = sum(e.metrics.central_bank_damage for e in self.country_engines.values())
+        total_gov_damage = sum(e.metrics.government_damage for e in self.country_engines.values())
+
+        self.metrics.global_metrics = {
+            "total_gdp": str(total_gdp),
+            "avg_inflation": avg_inflation,
+            "avg_freedom_index": avg_freedom,
+            "total_cb_damage": str(total_cb_damage),
+            "total_gov_damage": str(total_gov_damage),
+            "high_war_risk_pairs": len(war_risks),
+        }
+
+        # Store influence effects
+        self.metrics.influence_effects = {
+            k: v.get("total_external", 0.0)
+            for k, v in influences.items()
+        }
+
+        # Store history
+        self.metrics_history.append(MultiCountryMetrics(
+            tick=self.metrics.tick,
+            country_metrics=self.metrics.country_metrics.copy(),
+            global_metrics=self.metrics.global_metrics.copy(),
+            war_risks=self.metrics.war_risks.copy(),
+            influence_effects=self.metrics.influence_effects.copy(),
+        ))
+
+    def _print_progress(self):
+        """Print progress indicator"""
+        print(f"\n--- Month {self.current_tick} ---")
+        for country, engine in list(self.country_engines.items())[:5]:  # Top 5
+            print(f"  {country}: Inflation={engine.metrics.inflation_rate:.1%}, "
+                  f"Freedom={engine.metrics.freedom_index:.0f}")
+
+        if self.metrics.war_risks:
+            highest = self.metrics.war_risks[0]
+            print(f"  Highest war risk: {highest['countries'][0]}-{highest['countries'][1]} "
+                  f"({highest['probability']:.1%})")
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get multi-country simulation summary"""
+        country_summaries = {}
+        for country, engine in self.country_engines.items():
+            country_summaries[country] = {
+                "inflation": engine.metrics.inflation_rate,
+                "unemployment": engine.metrics.unemployment_rate,
+                "freedom_index": engine.metrics.freedom_index,
+                "cb_damage": str(engine.metrics.central_bank_damage),
+                "gov_damage": str(engine.metrics.government_damage),
+                "btc_price": str(engine.metrics.bitcoin_price),
+            }
+
+        return {
+            "config": {
+                "countries": self.config.countries,
+                "ticks": self.current_tick,
+            },
+            "state": self.state.value,
+            "countries": country_summaries,
+            "global_metrics": self.metrics.global_metrics,
+            "war_risks": self.metrics.war_risks[:5],  # Top 5
+            "relationship_summary": self.relationship_manager.get_summary(),
+        }
+
+    def get_war_risk_report(self) -> Dict[str, Any]:
+        """Get detailed war risk report"""
+        relationships = {}
+        for country_a in self.config.countries:
+            for country_b in self.config.countries:
+                if country_a != country_b:
+                    rel = self.relationship_manager.get_relationship(country_a, country_b)
+                    if rel:
+                        relationships[(country_a, country_b)] = rel
+
+        global_risk = self.war_calculator.get_global_war_risk(relationships)
+
+        return {
+            "global_risk": global_risk,
+            "high_risk_pairs": self.metrics.war_risks,
+            "sanctioned_pairs": self.relationship_manager.get_sanctioned_pairs(),
+        }
+
+    def compare_countries(
+        self,
+        countries: Optional[List[str]] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """Compare metrics across countries"""
+        countries = countries or list(self.country_engines.keys())
+
+        comparison = {}
+        for country in countries:
+            engine = self.country_engines.get(country)
+            if engine:
+                comparison[country] = {
+                    "regime": engine.config.regime_type.value,
+                    "freedom_index": engine.metrics.freedom_index,
+                    "inflation": engine.metrics.inflation_rate,
+                    "unemployment": engine.metrics.unemployment_rate,
+                    "cb_damage": float(engine.metrics.central_bank_damage),
+                    "gov_damage": float(engine.metrics.government_damage),
+                    "btc_price": float(engine.metrics.bitcoin_price),
+                }
+
+        # Sort by freedom index (Austrian preference)
+        sorted_comparison = dict(sorted(
+            comparison.items(),
+            key=lambda x: x[1]["freedom_index"],
+            reverse=True
+        ))
+
+        return sorted_comparison
