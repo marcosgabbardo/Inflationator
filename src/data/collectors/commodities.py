@@ -9,9 +9,10 @@ Austrian Theory Relevance:
 - Oil as economic activity indicator
 """
 
-from decimal import Decimal
-from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
 import yfinance as yf
 
 
@@ -38,8 +39,8 @@ class CommoditiesCollector:
     }
 
     def __init__(self):
-        self._cache: Dict[str, Any] = {}
-        self._cache_time: Optional[datetime] = None
+        self._cache: dict[str, Any] = {}
+        self._cache_time: datetime | None = None
         self._cache_ttl = timedelta(minutes=15)
 
     def _is_cache_valid(self) -> bool:
@@ -48,7 +49,7 @@ class CommoditiesCollector:
             return False
         return datetime.now() - self._cache_time < self._cache_ttl
 
-    def get_current_prices(self) -> Dict[str, Decimal]:
+    def get_current_prices(self) -> dict[str, Decimal]:
         """
         Get current prices for all commodities.
 
@@ -92,7 +93,7 @@ class CommoditiesCollector:
         }
         return mock_prices.get(commodity, Decimal("100"))
 
-    def get_gold_price(self) -> Dict[str, Any]:
+    def get_gold_price(self) -> dict[str, Any]:
         """
         Get detailed gold price data.
 
@@ -128,7 +129,7 @@ class CommoditiesCollector:
             "volume_avg": Decimal("100000"),
         }
 
-    def get_silver_price(self) -> Dict[str, Any]:
+    def get_silver_price(self) -> dict[str, Any]:
         """Get detailed silver price data"""
         try:
             silver = yf.Ticker(self.TICKERS["silver"])
@@ -141,7 +142,9 @@ class CommoditiesCollector:
 
                 # Gold/Silver ratio (important metric)
                 gold_price = self.get_gold_price()["price_usd"]
-                gs_ratio = float(gold_price / current_price) if current_price > 0 else 80
+                gs_ratio = (
+                    float(gold_price / current_price) if current_price > 0 else 80
+                )
 
                 return {
                     "price_usd": current_price,
@@ -158,7 +161,7 @@ class CommoditiesCollector:
             "gold_silver_ratio": 80.0,
         }
 
-    def get_oil_price(self) -> Dict[str, Any]:
+    def get_oil_price(self) -> dict[str, Any]:
         """
         Get oil price data.
 
@@ -194,10 +197,8 @@ class CommoditiesCollector:
         }
 
     def get_historical_prices(
-        self,
-        commodity: str,
-        period: str = "1y"
-    ) -> List[Dict[str, Any]]:
+        self, commodity: str, period: str = "1y"
+    ) -> list[dict[str, Any]]:
         """
         Get historical price data for a commodity.
 
@@ -234,9 +235,9 @@ class CommoditiesCollector:
 
     def calculate_commodity_inflation(
         self,
-        current_prices: Dict[str, Decimal],
-        baseline_prices: Optional[Dict[str, Decimal]] = None
-    ) -> Dict[str, float]:
+        current_prices: dict[str, Decimal],
+        baseline_prices: dict[str, Decimal] | None = None,
+    ) -> dict[str, float]:
         """
         Calculate inflation using commodity basket.
 
@@ -290,7 +291,7 @@ class CommoditiesCollector:
 
         return inflation_rates
 
-    def get_commodity_basket_index(self) -> Dict[str, Any]:
+    def get_commodity_basket_index(self) -> dict[str, Any]:
         """
         Create our own commodity price index.
 
@@ -309,7 +310,7 @@ class CommoditiesCollector:
 
 
 # Simple interface
-def get_commodity_prices() -> Dict[str, Decimal]:
+def get_commodity_prices() -> dict[str, Decimal]:
     """Get current commodity prices"""
     collector = CommoditiesCollector()
     return collector.get_current_prices()

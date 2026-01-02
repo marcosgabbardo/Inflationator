@@ -4,26 +4,21 @@ Inflationator CLI
 Command-line interface for the Austrian Economics simulator.
 """
 
+import os
+import sys
+from enum import Enum
+
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import print as rprint
-from typing import Optional
-from enum import Enum
-import sys
-import os
+from rich.table import Table
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.simulation.engine import (
-    SimulationEngine,
-    SimulationConfig,
-    MultiCountrySimulationEngine,
-    MultiCountryConfig,
-)
+from pathlib import Path
+
 from src.agents.government import RegimeType
 from src.data.collectors.bitcoin import get_bitcoin_price
 from src.data.collectors.commodities import get_commodity_prices
@@ -31,8 +26,13 @@ from src.data.real_world_conditions import (
     get_real_world_conditions,
     print_conditions_summary,
 )
-from src.reports import ReportGenerator, ReportConfig
-from pathlib import Path
+from src.reports import ReportConfig, ReportGenerator
+from src.simulation.engine import (
+    MultiCountryConfig,
+    MultiCountrySimulationEngine,
+    SimulationConfig,
+    SimulationEngine,
+)
 
 app = typer.Typer(
     name="inflationator",
@@ -45,6 +45,7 @@ console = Console()
 
 class RegimeChoice(str, Enum):
     """Regime choices for CLI"""
+
     ANCAP = "ancap"
     MINARCHY = "minarchy"
     MONARCHY = "monarchy"
@@ -55,21 +56,28 @@ class RegimeChoice(str, Enum):
 
 @app.command()
 def run(
-    months: int = typer.Option(12, "--months", "-m", help="Number of months to simulate"),
-    country: str = typer.Option("USA", "--country", "-c", help="Country code (USA, EUR, etc.)"),
-    regime: RegimeChoice = typer.Option(
-        RegimeChoice.DEMOCRACY_LIBERAL,
-        "--regime", "-r",
-        help="Government regime type"
+    months: int = typer.Option(
+        12, "--months", "-m", help="Number of months to simulate"
     ),
-    persons: int = typer.Option(100000, "--persons", "-p", help="Number of person agents"),
+    country: str = typer.Option(
+        "USA", "--country", "-c", help="Country code (USA, EUR, etc.)"
+    ),
+    regime: RegimeChoice = typer.Option(
+        RegimeChoice.DEMOCRACY_LIBERAL, "--regime", "-r", help="Government regime type"
+    ),
+    persons: int = typer.Option(
+        100000, "--persons", "-p", help="Number of person agents"
+    ),
     companies: int = typer.Option(10000, "--companies", help="Number of companies"),
     intervention: float = typer.Option(
-        0.5, "--intervention", "-i",
-        help="Central bank intervention level (0-1)"
+        0.5, "--intervention", "-i", help="Central bank intervention level (0-1)"
     ),
-    report: bool = typer.Option(False, "--report", help="Generate PDF scientific report after simulation"),
-    report_dir: str = typer.Option("reports", "--report-dir", help="Directory for generated reports"),
+    report: bool = typer.Option(
+        False, "--report", help="Generate PDF scientific report after simulation"
+    ),
+    report_dir: str = typer.Option(
+        "reports", "--report-dir", help="Directory for generated reports"
+    ),
 ):
     """
     Run the economic simulation.
@@ -77,11 +85,13 @@ def run(
     Simulates an economy with Austrian Economics principles,
     tracking the damage caused by central banks and governments.
     """
-    console.print(Panel.fit(
-        "[bold blue]INFLATIONATOR[/bold blue]\n"
-        "[dim]Austrian Economics World Simulator[/dim]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold blue]INFLATIONATOR[/bold blue]\n"
+            "[dim]Austrian Economics World Simulator[/dim]",
+            border_style="blue",
+        )
+    )
 
     # Map CLI regime to actual enum
     regime_map = {
@@ -125,7 +135,7 @@ def run(
 
     # Run simulation
     console.print("\n[bold]Running simulation...[/bold]")
-    metrics = engine.run(months)
+    engine.run(months)
 
     # Show results
     _display_results(engine)
@@ -143,11 +153,13 @@ def prices():
     Gets Bitcoin and commodity prices from private sources
     (not government statistics).
     """
-    console.print(Panel.fit(
-        "[bold]Real-Time Prices[/bold]\n"
-        "[dim]From private sources, not government[/dim]",
-        border_style="green"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]Real-Time Prices[/bold]\n"
+            "[dim]From private sources, not government[/dim]",
+            border_style="green",
+        )
+    )
 
     with Progress(
         SpinnerColumn(),
@@ -174,7 +186,10 @@ def prices():
     btc_table.add_column("Price", style="green")
     for currency, price in btc_prices.items():
         if currency not in ["change_24h", "market_cap_usd"]:
-            btc_table.add_row(currency.upper(), f"${price:,.2f}" if isinstance(price, (int, float)) else str(price))
+            btc_table.add_row(
+                currency.upper(),
+                f"${price:,.2f}" if isinstance(price, (int, float)) else str(price),
+            )
     console.print(btc_table)
 
     # Commodities
@@ -190,7 +205,9 @@ def prices():
 def scenario(
     name: str = typer.Argument(..., help="Scenario name"),
     months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
-    tariff_rate: float = typer.Option(0.25, "--tariff", "-t", help="Tariff rate for trade war (0-1)"),
+    tariff_rate: float = typer.Option(
+        0.25, "--tariff", "-t", help="Tariff rate for trade war (0-1)"
+    ),
 ):
     """
     Run a what-if scenario.
@@ -210,10 +227,12 @@ def scenario(
     - trade_war: Initiate trade war with tariffs (use --tariff to set rate)
     - trump_tariffs: Apply Trump-style tariff policy (20% general + sector-specific)
     """
-    console.print(Panel.fit(
-        f"[bold yellow]SCENARIO: {name.upper()}[/bold yellow]",
-        border_style="yellow"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold yellow]SCENARIO: {name.upper()}[/bold yellow]",
+            border_style="yellow",
+        )
+    )
 
     config = SimulationConfig(ticks_per_run=months)
     engine = SimulationEngine(config)
@@ -236,7 +255,9 @@ def scenario(
         engine.apply_scenario("election_year", {})
     else:
         console.print(f"[red]Unknown scenario: {name}[/red]")
-        console.print("[dim]Run 'inflationator scenario --help' for available scenarios[/dim]")
+        console.print(
+            "[dim]Run 'inflationator scenario --help' for available scenarios[/dim]"
+        )
         raise typer.Exit(1)
 
     # Run
@@ -256,11 +277,13 @@ def compare(
     Run simulations with different government types and compare outcomes.
     Perfect for testing Hoppe's democracy vs monarchy thesis.
     """
-    console.print(Panel.fit(
-        f"[bold]Regime Comparison[/bold]\n"
-        f"[cyan]{regime1.value}[/cyan] vs [cyan]{regime2.value}[/cyan]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]Regime Comparison[/bold]\n"
+            f"[cyan]{regime1.value}[/cyan] vs [cyan]{regime2.value}[/cyan]",
+            border_style="blue",
+        )
+    )
 
     regime_map = {
         RegimeChoice.ANCAP: RegimeType.ANCAP,
@@ -284,11 +307,13 @@ def compare(
         engine = SimulationEngine(config)
         engine.initialize()
         engine.run(months)
-        results.append({
-            "regime": regime.value,
-            "metrics": engine.metrics,
-            "damage": engine.get_damage_summary(),
-        })
+        results.append(
+            {
+                "regime": regime.value,
+                "metrics": engine.metrics,
+                "damage": engine.get_damage_summary(),
+            }
+        )
 
     # Compare
     compare_table = Table(title="Comparison Results")
@@ -300,34 +325,40 @@ def compare(
     compare_table.add_row(
         "Freedom Index",
         f"{r1['metrics'].freedom_index:.1f}",
-        f"{r2['metrics'].freedom_index:.1f}"
+        f"{r2['metrics'].freedom_index:.1f}",
     )
     compare_table.add_row(
         "Inflation Rate",
         f"{r1['metrics'].inflation_rate:.2%}",
-        f"{r2['metrics'].inflation_rate:.2%}"
+        f"{r2['metrics'].inflation_rate:.2%}",
     )
     compare_table.add_row(
         "Unemployment",
         f"{r1['metrics'].unemployment_rate:.2%}",
-        f"{r2['metrics'].unemployment_rate:.2%}"
+        f"{r2['metrics'].unemployment_rate:.2%}",
     )
     compare_table.add_row(
         "CB Damage",
         f"${r1['metrics'].central_bank_damage:,.0f}",
-        f"${r2['metrics'].central_bank_damage:,.0f}"
+        f"${r2['metrics'].central_bank_damage:,.0f}",
     )
     compare_table.add_row(
         "Gov Damage",
         f"${r1['metrics'].government_damage:,.0f}",
-        f"${r2['metrics'].government_damage:,.0f}"
+        f"${r2['metrics'].government_damage:,.0f}",
     )
 
     console.print(compare_table)
 
     # Winner
-    winner = regime1 if r1['metrics'].freedom_index > r2['metrics'].freedom_index else regime2
-    console.print(f"\n[bold green]Winner: {winner.value}[/bold green] (Higher freedom index)")
+    winner = (
+        regime1
+        if r1["metrics"].freedom_index > r2["metrics"].freedom_index
+        else regime2
+    )
+    console.print(
+        f"\n[bold green]Winner: {winner.value}[/bold green] (Higher freedom index)"
+    )
 
 
 @app.command()
@@ -346,11 +377,13 @@ def conditions(
 
     Austrian Theory: Use market data, not government statistics.
     """
-    console.print(Panel.fit(
-        f"[bold blue]TODAY'S ECONOMY - {country}[/bold blue]\n"
-        "[dim]Real-time data from private sources[/dim]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold blue]TODAY'S ECONOMY - {country}[/bold blue]\n"
+            "[dim]Real-time data from private sources[/dim]",
+            border_style="blue",
+        )
+    )
 
     with Progress(
         SpinnerColumn(),
@@ -378,21 +411,16 @@ def conditions(
 
     signals_table.add_row(
         "BTC vs Gold Ratio",
-        f"{float(conditions.btc_price_usd / conditions.gold_price_usd):.1f}x"
+        f"{float(conditions.btc_price_usd / conditions.gold_price_usd):.1f}x",
     )
+    signals_table.add_row("Market Sentiment", conditions.market_sentiment.upper())
     signals_table.add_row(
-        "Market Sentiment",
-        conditions.market_sentiment.upper()
-    )
-    signals_table.add_row(
-        "Monetary Policy",
-        conditions.monetary_expansion_signal.upper()
+        "Monetary Policy", conditions.monetary_expansion_signal.upper()
     )
 
     if conditions.yield_curve_inverted:
         signals_table.add_row(
-            "[bold red]WARNING[/bold red]",
-            "Yield curve inverted - recession signal!"
+            "[bold red]WARNING[/bold red]", "Yield curve inverted - recession signal!"
         )
 
     console.print(signals_table)
@@ -401,17 +429,27 @@ def conditions(
     console.print("\n[bold]Austrian Interpretation:[/bold]")
     real_inflation = conditions.inflation_estimate
     if real_inflation > 10:
-        console.print(f"[red]  - Real inflation ({real_inflation:.1f}%) significantly higher than CPI claims[/red]")
+        console.print(
+            f"[red]  - Real inflation ({real_inflation:.1f}%) significantly higher than CPI claims[/red]"
+        )
     else:
-        console.print(f"[yellow]  - Real inflation ({real_inflation:.1f}%) - monitor for changes[/yellow]")
+        console.print(
+            f"[yellow]  - Real inflation ({real_inflation:.1f}%) - monitor for changes[/yellow]"
+        )
 
     if conditions.dollar_debasement_10y > 100:
-        console.print(f"[red]  - Dollar has lost {conditions.dollar_debasement_10y:.0f}% of purchasing power in 10 years[/red]")
+        console.print(
+            f"[red]  - Dollar has lost {conditions.dollar_debasement_10y:.0f}% of purchasing power in 10 years[/red]"
+        )
 
     if conditions.recession_probability > 0.4:
-        console.print(f"[red]  - Recession probability ({conditions.recession_probability:.0%}) is elevated[/red]")
+        console.print(
+            f"[red]  - Recession probability ({conditions.recession_probability:.0%}) is elevated[/red]"
+        )
 
-    console.print("\n[dim]'Inflation is always and everywhere a monetary phenomenon.' - Friedman[/dim]")
+    console.print(
+        "\n[dim]'Inflation is always and everywhere a monetary phenomenon.' - Friedman[/dim]"
+    )
     console.print("[dim](But the Austrians knew it first!)[/dim]")
 
 
@@ -441,8 +479,12 @@ def regimes():
 
     console.print(table)
 
-    console.print("\n[dim]Hoppe's insight: Democracy has higher time preference than monarchy.[/dim]")
-    console.print("[dim]Politicians don't own, so they extract maximum value short-term.[/dim]")
+    console.print(
+        "\n[dim]Hoppe's insight: Democracy has higher time preference than monarchy.[/dim]"
+    )
+    console.print(
+        "[dim]Politicians don't own, so they extract maximum value short-term.[/dim]"
+    )
 
 
 @app.command()
@@ -495,9 +537,15 @@ def _display_results(engine: SimulationEngine):
     damage_table.add_column("Source", style="yellow")
     damage_table.add_column("Damage", style="red")
 
-    damage_table.add_row("Central Bank Damage", f"${float(metrics['central_bank_damage']):,.0f}")
-    damage_table.add_row("Government Damage", f"${float(metrics['government_damage']):,.0f}")
-    damage_table.add_row("Total Malinvestment", f"${float(metrics['total_malinvestment']):,.0f}")
+    damage_table.add_row(
+        "Central Bank Damage", f"${float(metrics['central_bank_damage']):,.0f}"
+    )
+    damage_table.add_row(
+        "Government Damage", f"${float(metrics['government_damage']):,.0f}"
+    )
+    damage_table.add_row(
+        "Total Malinvestment", f"${float(metrics['total_malinvestment']):,.0f}"
+    )
     damage_table.add_row("Freedom Index", f"{metrics['freedom_index']:.1f}/100")
     console.print(damage_table)
 
@@ -511,13 +559,25 @@ def _display_results(engine: SimulationEngine):
         policy_table.add_row("Tariff Rate", f"{engine.government.tariff_rate:.1%}")
         policy_table.add_row("Tariff Mode", engine.government.tariff_mode)
 
-        if engine.government.regime_type.value in ["democracy_liberal", "democracy_socialist"]:
+        if engine.government.regime_type.value in [
+            "democracy_liberal",
+            "democracy_socialist",
+        ]:
             cycle_year = engine.government.current_year_in_cycle
-            policy_table.add_row("Election Cycle", f"Year {cycle_year:.1f} of {engine.government.election_cycle_years}")
-            policy_table.add_row("Election Easing", "Yes" if engine.government.election_easing_active else "No")
+            policy_table.add_row(
+                "Election Cycle",
+                f"Year {cycle_year:.1f} of {engine.government.election_cycle_years}",
+            )
+            policy_table.add_row(
+                "Election Easing",
+                "Yes" if engine.government.election_easing_active else "No",
+            )
 
         if engine.government.state.trade_disruption > 0:
-            policy_table.add_row("Trade Disruption", f"${float(engine.government.state.trade_disruption):,.0f}")
+            policy_table.add_row(
+                "Trade Disruption",
+                f"${float(engine.government.state.trade_disruption):,.0f}",
+            )
 
         console.print(policy_table)
 
@@ -532,7 +592,9 @@ def _display_results(engine: SimulationEngine):
         cycle_table.add_row("Boom Intensity", f"{cycle.get('boom_intensity', 0):.2f}")
         cycle_table.add_row("Rate Distortion", f"{cycle.get('rate_distortion', 0):.2%}")
         cycle_table.add_row("Credit Signal", cycle.get("credit_signal", "unknown"))
-        cycle_table.add_row("Investment Signal", cycle.get("investment_signal", "unknown"))
+        cycle_table.add_row(
+            "Investment Signal", cycle.get("investment_signal", "unknown")
+        )
         console.print(cycle_table)
 
     # Recommendation
@@ -546,7 +608,7 @@ def countries():
 
     Shows 20 countries with their regime types and economic indicators.
     """
-    from src.countries.registry import get_all_countries, COUNTRY_REGISTRY
+    from src.countries.registry import COUNTRY_REGISTRY, get_all_countries
 
     table = Table(title="Available Countries (20)")
     table.add_column("Code", style="cyan")
@@ -563,24 +625,30 @@ def countries():
                 config.name,
                 config.regime_type.value,
                 f"{config.intervention_level:.0%}",
-                config.currency
+                config.currency,
             )
 
     console.print(table)
-    console.print("\n[dim]Use 'run-multi' to simulate multiple countries together[/dim]")
+    console.print(
+        "\n[dim]Use 'run-multi' to simulate multiple countries together[/dim]"
+    )
 
 
 @app.command()
 def run_multi(
     country_list: str = typer.Option(
-        "USA,CHN,BRA,JPN,DEU",
-        "--countries", "-c",
-        help="Comma-separated country codes"
+        "USA,CHN,BRA,JPN,DEU", "--countries", "-c", help="Comma-separated country codes"
     ),
     months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
-    persons: int = typer.Option(100000, "--persons", "-p", help="Base person agents (scaled by GDP)"),
-    report: bool = typer.Option(False, "--report", help="Generate PDF scientific report after simulation"),
-    report_dir: str = typer.Option("reports", "--report-dir", help="Directory for generated reports"),
+    persons: int = typer.Option(
+        100000, "--persons", "-p", help="Base person agents (scaled by GDP)"
+    ),
+    report: bool = typer.Option(
+        False, "--report", help="Generate PDF scientific report after simulation"
+    ),
+    report_dir: str = typer.Option(
+        "reports", "--report-dir", help="Directory for generated reports"
+    ),
 ):
     """
     Run multi-country simulation.
@@ -592,11 +660,13 @@ def run_multi(
     """
     countries_list = [c.strip().upper() for c in country_list.split(",")]
 
-    console.print(Panel.fit(
-        f"[bold blue]MULTI-COUNTRY SIMULATION[/bold blue]\n"
-        f"[dim]Countries: {', '.join(countries_list)}[/dim]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold blue]MULTI-COUNTRY SIMULATION[/bold blue]\n"
+            f"[dim]Countries: {', '.join(countries_list)}[/dim]",
+            border_style="blue",
+        )
+    )
 
     config = MultiCountryConfig(
         countries=countries_list,
@@ -644,16 +714,20 @@ def relations(
     from src.geopolitics.relationships import RelationshipManager
     from src.geopolitics.war_probability import WarProbabilityCalculator
 
-    console.print(Panel.fit(
-        f"[bold]Relationship: {country1.upper()} ↔ {country2.upper()}[/bold]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]Relationship: {country1.upper()} ↔ {country2.upper()}[/bold]",
+            border_style="cyan",
+        )
+    )
 
     manager = RelationshipManager()
     rel = manager.get_relationship(country1.upper(), country2.upper())
 
     if not rel:
-        console.print(f"[yellow]No direct relationship data for {country1}-{country2}[/yellow]")
+        console.print(
+            f"[yellow]No direct relationship data for {country1}-{country2}[/yellow]"
+        )
         return
 
     # Relationship details
@@ -666,7 +740,10 @@ def relations(
     rel_table.add_row("Trade Volume", f"${float(rel.trade_volume_usd):,.0f}")
 
     if rel.tariff_a_to_b > 0 or rel.tariff_b_to_a > 0:
-        rel_table.add_row("Tariffs", f"{country1}: {rel.tariff_a_to_b:.0%}, {country2}: {rel.tariff_b_to_a:.0%}")
+        rel_table.add_row(
+            "Tariffs",
+            f"{country1}: {rel.tariff_a_to_b:.0%}, {country2}: {rel.tariff_b_to_a:.0%}",
+        )
 
     if rel.current_tensions:
         rel_table.add_row("Tensions", ", ".join(rel.current_tensions))
@@ -683,18 +760,24 @@ def relations(
 
     war_table = Table(title="War Risk Assessment", show_header=False)
     war_table.add_column("Factor", style="cyan")
-    war_table.add_column("Value", style="red" if assessment.probability > 0.05 else "yellow")
+    war_table.add_column(
+        "Value", style="red" if assessment.probability > 0.05 else "yellow"
+    )
 
     war_table.add_row("Probability", f"{assessment.probability:.1%}")
     war_table.add_row("Risk Level", assessment.risk_level.upper())
-    war_table.add_row("Primary Triggers", ", ".join(t.value for t in assessment.primary_triggers[:3]))
+    war_table.add_row(
+        "Primary Triggers", ", ".join(t.value for t in assessment.primary_triggers[:3])
+    )
     war_table.add_row("Most Likely Type", assessment.most_likely_type.value)
     war_table.add_row("Nuclear Risk", "YES" if assessment.nuclear_risk else "No")
 
     console.print(war_table)
 
     if assessment.de_escalation_factors:
-        console.print(f"\n[green]De-escalation factors:[/green] {', '.join(assessment.de_escalation_factors[:3])}")
+        console.print(
+            f"\n[green]De-escalation factors:[/green] {', '.join(assessment.de_escalation_factors[:3])}"
+        )
 
 
 @app.command()
@@ -707,14 +790,16 @@ def war_risks():
     from src.geopolitics.relationships import RelationshipManager
     from src.geopolitics.war_probability import WarProbabilityCalculator
 
-    console.print(Panel.fit(
-        "[bold red]WAR RISK ANALYSIS[/bold red]\n"
-        "[dim]Pairs with >3% conflict probability[/dim]",
-        border_style="red"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold red]WAR RISK ANALYSIS[/bold red]\n"
+            "[dim]Pairs with >3% conflict probability[/dim]",
+            border_style="red",
+        )
+    )
 
     manager = RelationshipManager()
-    calculator = WarProbabilityCalculator()
+    WarProbabilityCalculator()
 
     # Get all high-risk pairs
     high_risk = manager.get_high_war_risk_pairs(threshold=0.03)
@@ -729,23 +814,23 @@ def war_risks():
     table.add_column("Risk Level", style="yellow")
 
     for country_a, country_b, prob in high_risk:
-        risk_level = "CRITICAL" if prob >= 0.10 else ("HIGH" if prob >= 0.05 else "MODERATE")
-        table.add_row(
-            f"{country_a} ↔ {country_b}",
-            f"{prob:.1%}",
-            risk_level
+        risk_level = (
+            "CRITICAL" if prob >= 0.10 else ("HIGH" if prob >= 0.05 else "MODERATE")
         )
+        table.add_row(f"{country_a} ↔ {country_b}", f"{prob:.1%}", risk_level)
 
     console.print(table)
 
     # Summary
-    console.print(f"\n[bold]Summary:[/bold]")
+    console.print("\n[bold]Summary:[/bold]")
     console.print(f"  Total high-risk pairs: {len(high_risk)}")
     if high_risk:
         highest = high_risk[0]
         console.print(f"  Highest risk: {highest[0]}-{highest[1]} ({highest[2]:.1%})")
 
-    console.print("\n[dim]Austrian insight: Trade reduces war probability (peace through commerce)[/dim]")
+    console.print(
+        "\n[dim]Austrian insight: Trade reduces war probability (peace through commerce)[/dim]"
+    )
 
 
 @app.command()
@@ -762,11 +847,12 @@ def compare_countries(
     """
     countries_list = [c.strip().upper() for c in country_list.split(",")]
 
-    console.print(Panel.fit(
-        f"[bold]Country Comparison[/bold]\n"
-        f"[dim]{', '.join(countries_list)}[/dim]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]Country Comparison[/bold]\n[dim]{', '.join(countries_list)}[/dim]",
+            border_style="blue",
+        )
+    )
 
     config = MultiCountryConfig(
         countries=countries_list,
@@ -804,14 +890,16 @@ def compare_countries(
             data["regime"],
             f"{data['freedom_index']:.0f}",
             f"{data['inflation']:.1%}",
-            f"${data['cb_damage']:,.0f}"
+            f"${data['cb_damage']:,.0f}",
         )
 
     console.print(table)
 
     # Winner
-    winner = list(comparison.keys())[0]
-    console.print(f"\n[bold green]Best outcome: {winner}[/bold green] (highest freedom index)")
+    winner = next(iter(comparison.keys()))
+    console.print(
+        f"\n[bold green]Best outcome: {winner}[/bold green] (highest freedom index)"
+    )
     console.print("[dim]Hoppe's thesis: Less intervention = better outcomes[/dim]")
 
 
@@ -836,8 +924,11 @@ def _generate_report(engine, report_dir: str, is_multi_country: bool = False):
         history = engine.metrics_history
 
         # Add initial conditions to summary if available
-        if hasattr(engine, 'external_data') and 'real_conditions' in engine.external_data:
-            summary['initial_conditions'] = engine.external_data['real_conditions']
+        if (
+            hasattr(engine, "external_data")
+            and "real_conditions" in engine.external_data
+        ):
+            summary["initial_conditions"] = engine.external_data["real_conditions"]
 
         # Generate appropriate report
         if is_multi_country:
@@ -845,11 +936,13 @@ def _generate_report(engine, report_dir: str, is_multi_country: bool = False):
         else:
             report_path = generator.generate_single_country_report(summary, history)
 
-        console.print(f"[green]Report generated successfully![/green]")
+        console.print("[green]Report generated successfully![/green]")
         console.print(f"[cyan]Report saved to: {report_path}[/cyan]")
 
     except ImportError as e:
-        console.print(f"[red]Report generation requires additional dependencies: {e}[/red]")
+        console.print(
+            f"[red]Report generation requires additional dependencies: {e}[/red]"
+        )
         console.print("[dim]Install with: pip install matplotlib reportlab[/dim]")
     except Exception as e:
         console.print(f"[red]Error generating report: {e}[/red]")
@@ -869,8 +962,12 @@ def _display_multi_country_results(engine: MultiCountrySimulationEngine):
     gm = summary.get("global_metrics", {})
     global_table.add_row("Average Inflation", f"{gm.get('avg_inflation', 0):.1%}")
     global_table.add_row("Average Freedom", f"{gm.get('avg_freedom_index', 0):.1f}")
-    global_table.add_row("Total CB Damage", f"${float(gm.get('total_cb_damage', '0')):,.0f}")
-    global_table.add_row("Total Gov Damage", f"${float(gm.get('total_gov_damage', '0')):,.0f}")
+    global_table.add_row(
+        "Total CB Damage", f"${float(gm.get('total_cb_damage', '0')):,.0f}"
+    )
+    global_table.add_row(
+        "Total Gov Damage", f"${float(gm.get('total_gov_damage', '0')):,.0f}"
+    )
     global_table.add_row("High War Risk Pairs", str(gm.get("high_war_risk_pairs", 0)))
     console.print(global_table)
 
@@ -888,7 +985,7 @@ def _display_multi_country_results(engine: MultiCountrySimulationEngine):
             f"{data['freedom_index']:.0f}",
             f"{data['inflation']:.1%}",
             f"{data['unemployment']:.1%}",
-            f"${float(data['btc_price']):,.0f}"
+            f"${float(data['btc_price']):,.0f}",
         )
 
     console.print(country_table)
@@ -905,7 +1002,7 @@ def _display_multi_country_results(engine: MultiCountrySimulationEngine):
             war_table.add_row(
                 f"{risk['countries'][0]} ↔ {risk['countries'][1]}",
                 f"{risk['probability']:.1%}",
-                ", ".join(risk.get("triggers", [])[:2])
+                ", ".join(risk.get("triggers", [])[:2]),
             )
 
         console.print(war_table)
@@ -913,10 +1010,12 @@ def _display_multi_country_results(engine: MultiCountrySimulationEngine):
     # Relationship summary
     rel_summary = summary.get("relationship_summary", {})
     if rel_summary:
-        console.print(f"\n[bold]Relationships:[/bold] "
-                     f"{rel_summary.get('allies', 0)} allies, "
-                     f"{rel_summary.get('rivals', 0)} rivals, "
-                     f"{rel_summary.get('enemies', 0)} enemies")
+        console.print(
+            f"\n[bold]Relationships:[/bold] "
+            f"{rel_summary.get('allies', 0)} allies, "
+            f"{rel_summary.get('rivals', 0)} rivals, "
+            f"{rel_summary.get('enemies', 0)} enemies"
+        )
 
 
 @app.callback()

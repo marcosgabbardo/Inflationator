@@ -9,20 +9,21 @@ Makes decisions about:
 - Investment (where to invest)
 """
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Dict, Any, List, Optional
 import random
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
 
-from .base import Agent, AgentType, AgentState
+from .base import Agent, AgentState, AgentType
 
 
 @dataclass
 class PersonState(AgentState):
     """Extended state for person agents"""
+
     income: Decimal = Decimal("0")
     employed: bool = True
-    employer_id: Optional[str] = None
+    employer_id: str | None = None
     skill_level: float = 0.5
     consumption_rate: float = 0.7
     age_group: str = "adult"  # young, adult, senior
@@ -41,7 +42,7 @@ class Person(Agent):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         time_preference: float = 0.5,
         risk_tolerance: float = 0.5,
@@ -64,15 +65,18 @@ class Person(Agent):
             wealth=initial_wealth,
             skill_level=self._validate_range(skill_level),
             age_group=age_group,
-            consumption_rate=0.5 + (time_preference * 0.4),  # Higher TP = more consumption
+            consumption_rate=0.5
+            + (time_preference * 0.4),  # Higher TP = more consumption
         )
 
         # Employment
-        self.employer_id: Optional[str] = None
+        self.employer_id: str | None = None
         self.wage: Decimal = Decimal("0")
 
         # Expectations (updated from real-world conditions)
-        self.inflation_expectation: float = 0.03  # Expected annual inflation (default 3%)
+        self.inflation_expectation: float = (
+            0.03  # Expected annual inflation (default 3%)
+        )
 
     @property
     def employed(self) -> bool:
@@ -86,7 +90,7 @@ class Person(Agent):
     # LABOR DECISIONS
     # ===========================================
 
-    def seek_employment(self, available_jobs: List[Dict]) -> Optional[Dict]:
+    def seek_employment(self, available_jobs: list[dict]) -> dict | None:
         """
         Look for employment based on wage offers.
 
@@ -98,7 +102,8 @@ class Person(Agent):
 
         # Filter jobs by skill requirement
         suitable_jobs = [
-            job for job in available_jobs
+            job
+            for job in available_jobs
             if job.get("required_skill", 0) <= self.skill_level
         ]
 
@@ -148,7 +153,7 @@ class Person(Agent):
     # CONSUMPTION DECISIONS
     # ===========================================
 
-    def decide_consumption(self, prices: Dict[str, Decimal]) -> Dict[str, Decimal]:
+    def decide_consumption(self, prices: dict[str, Decimal]) -> dict[str, Decimal]:
         """
         Decide how much to consume of each good.
 
@@ -177,7 +182,9 @@ class Person(Agent):
                 if price > 0:
                     price_dec = Decimal(str(price))
                     demand = discretionary * Decimal("0.2") / price_dec
-                    consumption[good] = min(demand * price_dec, discretionary * Decimal("0.2"))
+                    consumption[good] = min(
+                        demand * price_dec, discretionary * Decimal("0.2")
+                    )
 
         return consumption
 
@@ -193,11 +200,8 @@ class Person(Agent):
     # ===========================================
 
     def decide_savings_allocation(
-        self,
-        bitcoin_price: Decimal,
-        gold_price: Decimal,
-        expected_inflation: float
-    ) -> Dict[str, Decimal]:
+        self, bitcoin_price: Decimal, gold_price: Decimal, expected_inflation: float
+    ) -> dict[str, Decimal]:
         """
         Decide how to allocate savings.
 
@@ -215,7 +219,9 @@ class Person(Agent):
         }
 
         # If expecting high inflation, move to hard assets
-        inflation_fear = min(1.0, expected_inflation * 10)  # Scale inflation expectation
+        inflation_fear = min(
+            1.0, expected_inflation * 10
+        )  # Scale inflation expectation
 
         # Bitcoin allocation (higher risk, higher potential return)
         btc_allocation = inflation_fear * self.risk_tolerance * 0.3
@@ -252,7 +258,7 @@ class Person(Agent):
     # MAIN STEP FUNCTION
     # ===========================================
 
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Execute one simulation step.
 
@@ -266,12 +272,14 @@ class Person(Agent):
             tax_rate = world_state.get("tax_rate_income", 0.35)
             net_income = self.wage * Decimal(str(1 - tax_rate))
             self.receive_income(net_income, "wage")
-            actions.append({
-                "type": "income",
-                "amount": str(net_income),
-                "gross": str(self.wage),
-                "tax_paid": str(self.wage - net_income)
-            })
+            actions.append(
+                {
+                    "type": "income",
+                    "amount": str(net_income),
+                    "gross": str(self.wage),
+                    "tax_paid": str(self.wage - net_income),
+                }
+            )
 
         # 2. Make consumption decisions
         prices = world_state.get("prices", {})
@@ -279,11 +287,13 @@ class Person(Agent):
         total_consumed = sum(consumption.values())
         if total_consumed > 0:
             self.consume(total_consumed)
-            actions.append({
-                "type": "consumption",
-                "amount": str(total_consumed),
-                "breakdown": {k: str(v) for k, v in consumption.items()}
-            })
+            actions.append(
+                {
+                    "type": "consumption",
+                    "amount": str(total_consumed),
+                    "breakdown": {k: str(v) for k, v in consumption.items()},
+                }
+            )
 
         # 3. Update expectations
         actual_inflation = world_state.get("inflation_rate", 0.02)
@@ -298,10 +308,12 @@ class Person(Agent):
             allocation = self.decide_savings_allocation(
                 btc_price, gold_price, self.state.expectations.get("inflation", 0.02)
             )
-            actions.append({
-                "type": "rebalance",
-                "allocation": {k: str(v) for k, v in allocation.items()}
-            })
+            actions.append(
+                {
+                    "type": "rebalance",
+                    "allocation": {k: str(v) for k, v in allocation.items()},
+                }
+            )
 
         return actions
 
@@ -335,8 +347,7 @@ class Person(Agent):
 
         # Age group
         age_group = random.choices(
-            ["young", "adult", "senior"],
-            weights=[0.25, 0.55, 0.20]
+            ["young", "adult", "senior"], weights=[0.25, 0.55, 0.20]
         )[0]
 
         # Initial wealth (log-normal - most poor, some rich)

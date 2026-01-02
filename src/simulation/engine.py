@@ -11,35 +11,37 @@ Austrian Economics Simulation:
 - Track the damage caused by interventions
 """
 
+import asyncio
+import contextlib
+import copy
+import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, Any, List, Optional, Callable
-from datetime import datetime, timedelta
-import asyncio
-import random
-import copy
 from enum import Enum
+from typing import Any
 
-from src.agents.person import Person
-from src.agents.company import Company
 from src.agents.bank import Bank
 from src.agents.central_bank import CentralBank
+from src.agents.company import Company
 from src.agents.government import Government, RegimeType
-from src.economy.market import MarketManager, MarketType
-from src.economy.labor_market import LaborMarket
-from src.economy.austrian.business_cycle import BusinessCycle, CyclePhase
+from src.agents.person import Person
 from src.data.collectors.bitcoin import BitcoinCollector
 from src.data.collectors.commodities import CommoditiesCollector
 from src.data.real_world_conditions import (
+    EconomicConditions,
     RealWorldConditionsCollector,
     RealWorldInitializer,
-    EconomicConditions,
     print_conditions_summary,
 )
+from src.economy.austrian.business_cycle import BusinessCycle
+from src.economy.labor_market import LaborMarket
+from src.economy.market import MarketManager, MarketType
 
 
 class SimulationState(str, Enum):
     """Simulation states"""
+
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -50,6 +52,7 @@ class SimulationState(str, Enum):
 @dataclass
 class SimulationMetrics:
     """Key metrics tracked during simulation"""
+
     tick: int = 0
     real_time_months: int = 0  # Changed from weeks to months
 
@@ -72,7 +75,7 @@ class SimulationMetrics:
     # Freedom metrics
     freedom_index: float = 50.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tick": self.tick,
             "real_time_months": self.real_time_months,
@@ -93,6 +96,7 @@ class SimulationMetrics:
 @dataclass
 class SimulationConfig:
     """Configuration for a simulation run"""
+
     country: str = "USA"
     num_persons: int = 100_000  # 100k persons default
     num_companies: int = 10_000  # 10k companies default
@@ -118,17 +122,17 @@ class SimulationEngine:
     5. Calculate true inflation (not CPI)
     """
 
-    def __init__(self, config: Optional[SimulationConfig] = None):
+    def __init__(self, config: SimulationConfig | None = None):
         self.config = config or SimulationConfig()
         self.state = SimulationState.IDLE
         self.current_tick = 0
 
         # Agents
-        self.persons: List[Person] = []
-        self.companies: List[Company] = []
-        self.banks: List[Bank] = []
-        self.central_bank: Optional[CentralBank] = None
-        self.government: Optional[Government] = None
+        self.persons: list[Person] = []
+        self.companies: list[Company] = []
+        self.banks: list[Bank] = []
+        self.central_bank: CentralBank | None = None
+        self.government: Government | None = None
 
         # Markets
         self.market_manager = MarketManager(self.config.country)
@@ -139,21 +143,31 @@ class SimulationEngine:
 
         # Metrics
         self.metrics = SimulationMetrics()
-        self.metrics_history: List[SimulationMetrics] = []
+        self.metrics_history: list[SimulationMetrics] = []
 
         # Callbacks for UI updates
-        self.on_tick_complete: Optional[Callable[[SimulationMetrics], None]] = None
-        self.on_simulation_complete: Optional[Callable[[List[SimulationMetrics]], None]] = None
+        self.on_tick_complete: Callable[[SimulationMetrics], None] | None = None
+        self.on_simulation_complete: (
+            Callable[[list[SimulationMetrics]], None] | None
+        ) = None
 
         # External data (real prices)
-        self.external_data: Dict[str, Any] = {}
-        self.bitcoin_collector = BitcoinCollector() if self.config.use_real_data else None
-        self.commodities_collector = CommoditiesCollector() if self.config.use_real_data else None
+        self.external_data: dict[str, Any] = {}
+        self.bitcoin_collector = (
+            BitcoinCollector() if self.config.use_real_data else None
+        )
+        self.commodities_collector = (
+            CommoditiesCollector() if self.config.use_real_data else None
+        )
 
         # Real-world conditions (comprehensive economic state)
-        self.real_conditions: Optional[EconomicConditions] = None
-        self.conditions_collector = RealWorldConditionsCollector(self.config.country) if self.config.use_real_data else None
-        self.real_world_initializer: Optional[RealWorldInitializer] = None
+        self.real_conditions: EconomicConditions | None = None
+        self.conditions_collector = (
+            RealWorldConditionsCollector(self.config.country)
+            if self.config.use_real_data
+            else None
+        )
+        self.real_world_initializer: RealWorldInitializer | None = None
 
     # ===========================================
     # INITIALIZATION
@@ -187,9 +201,11 @@ class SimulationEngine:
         self._update_metrics()
 
         self.state = SimulationState.IDLE
-        print(f"Initialized: {len(self.persons)} persons, "
-              f"{len(self.companies)} companies, "
-              f"{len(self.banks)} banks")
+        print(
+            f"Initialized: {len(self.persons)} persons, "
+            f"{len(self.companies)} companies, "
+            f"{len(self.banks)} banks"
+        )
 
     def _create_markets(self):
         """Create default markets"""
@@ -226,11 +242,12 @@ class SimulationEngine:
     def _create_government(self):
         """Create the government villain"""
         self.government = Government.create_for_country(
-            self.config.country,
-            self.config.regime_type
+            self.config.country, self.config.regime_type
         )
-        print(f"Created Government: {self.government.name} "
-              f"(Regime: {self.government.regime_type.value})")
+        print(
+            f"Created Government: {self.government.name} "
+            f"(Regime: {self.government.regime_type.value})"
+        )
 
     def _fetch_real_data(self):
         """
@@ -302,8 +319,12 @@ class SimulationEngine:
                 }
 
                 # Update config with historical data from real conditions
-                self.config.historical_gdp_growth = self.real_conditions.historical_gdp_growth
-                self.config.historical_unemployment = self.real_conditions.historical_unemployment
+                self.config.historical_gdp_growth = (
+                    self.real_conditions.historical_gdp_growth
+                )
+                self.config.historical_unemployment = (
+                    self.real_conditions.historical_unemployment
+                )
 
                 # Print summary
                 print_conditions_summary(self.real_conditions)
@@ -324,6 +345,7 @@ class SimulationEngine:
 
     def _fetch_basic_real_data(self):
         """Fallback: fetch basic price data if comprehensive fetch fails."""
+
         def _set_market_price(market, price):
             if market and price:
                 market.current_price = price
@@ -345,7 +367,9 @@ class SimulationEngine:
                     gold_market = self.market_manager.get_market_by_name("Gold (oz)")
                     _set_market_price(gold_market, comm_prices["gold"])
                 if "silver" in comm_prices:
-                    silver_market = self.market_manager.get_market_by_name("Silver (oz)")
+                    silver_market = self.market_manager.get_market_by_name(
+                        "Silver (oz)"
+                    )
                     _set_market_price(silver_market, comm_prices["silver"])
                 if "oil" in comm_prices:
                     oil_market = self.market_manager.get_market_by_name("Oil (barrel)")
@@ -372,9 +396,13 @@ class SimulationEngine:
 
         # Determine if QE/QT active based on conditions
         if self.real_conditions.monetary_expansion_signal == "loose":
-            self.central_bank.start_qe(monthly_amount=Decimal("50000000000"))  # $50B/month
+            self.central_bank.start_qe(
+                monthly_amount=Decimal("50000000000")
+            )  # $50B/month
         elif self.real_conditions.monetary_expansion_signal == "tight":
-            self.central_bank.start_qt(monthly_reduction=Decimal("30000000000"))  # $30B/month
+            self.central_bank.start_qt(
+                monthly_reduction=Decimal("30000000000")
+            )  # $30B/month
 
     def _apply_conditions_to_agents(self):
         """
@@ -393,7 +421,7 @@ class SimulationEngine:
         sim_config = collector.to_simulation_config(self.real_conditions)
         agent_modifiers = sim_config.get("agent_modifiers", {})
 
-        fear_shift = agent_modifiers.get("fear_level", 0.5)
+        agent_modifiers.get("fear_level", 0.5)
         time_pref_shift = agent_modifiers.get("time_preference_shift", 0)
         risk_shift = agent_modifiers.get("risk_tolerance_shift", 0)
         inflation_exp = agent_modifiers.get("inflation_expectations", 0.03)
@@ -401,14 +429,14 @@ class SimulationEngine:
         # Apply to persons
         for person in self.persons:
             # Shift time preference based on conditions
-            person.time_preference = max(0.1, min(0.9,
-                person.time_preference + time_pref_shift
-            ))
+            person.time_preference = max(
+                0.1, min(0.9, person.time_preference + time_pref_shift)
+            )
 
             # Shift risk tolerance
-            person.risk_tolerance = max(0.1, min(0.9,
-                person.risk_tolerance + risk_shift
-            ))
+            person.risk_tolerance = max(
+                0.1, min(0.9, person.risk_tolerance + risk_shift)
+            )
 
             # Set inflation expectations
             person.inflation_expectation = inflation_exp
@@ -416,9 +444,13 @@ class SimulationEngine:
         # Apply to companies
         for company in self.companies:
             # Companies also affected by conditions
-            company.time_preference = max(0.1, min(0.9,
-                company.time_preference + time_pref_shift * 0.5  # Less reactive
-            ))
+            company.time_preference = max(
+                0.1,
+                min(
+                    0.9,
+                    company.time_preference + time_pref_shift * 0.5,  # Less reactive
+                ),
+            )
 
         # Update employment rate based on conditions
         if self.real_world_initializer:
@@ -428,7 +460,9 @@ class SimulationEngine:
 
             # Adjust if significantly different
             if abs(current_rate - target_employment) > 0.05:
-                print(f"  Adjusting employment: {current_rate:.1%} -> {target_employment:.1%}")
+                print(
+                    f"  Adjusting employment: {current_rate:.1%} -> {target_employment:.1%}"
+                )
 
     def _initialize_labor_market(self):
         """
@@ -477,18 +511,20 @@ class SimulationEngine:
         result = self.labor_market.initialize_employment(
             persons=self.persons,
             companies=self.companies,
-            initial_employment_rate=initial_employment
+            initial_employment_rate=initial_employment,
         )
 
-        print(f"Labor Market Initialized:")
+        print("Labor Market Initialized:")
         print(f"  - Employed: {result['employed']} ({result['employment_rate']:.1%})")
-        print(f"  - Unemployed: {result['unemployed']} ({result['unemployment_rate']:.1%})")
+        print(
+            f"  - Unemployed: {result['unemployed']} ({result['unemployment_rate']:.1%})"
+        )
 
     # ===========================================
     # SIMULATION LOOP
     # ===========================================
 
-    def run(self, ticks: Optional[int] = None) -> List[SimulationMetrics]:
+    def run(self, ticks: int | None = None) -> list[SimulationMetrics]:
         """
         Run the simulation for specified ticks.
 
@@ -529,7 +565,7 @@ class SimulationEngine:
 
         # 1. Government actions (fiscal distortions) - FIRST to get election easing
         if self.government:
-            gov_actions = self.government.step(world_state)
+            self.government.step(world_state)
 
             # Check for political pressure on Central Bank (election year)
             cb_pressure = self.government.pressure_central_bank(
@@ -547,7 +583,7 @@ class SimulationEngine:
                 # Austrian view: This is why CB "independence" is a myth
                 self.central_bank.state.rate_cuts_cumulative += pressure_level * 0.002
 
-            cb_actions = self.central_bank.step(world_state)
+            self.central_bank.step(world_state)
 
         # 3. Banks process (credit creation)
         for bank in self.banks:
@@ -572,7 +608,7 @@ class SimulationEngine:
         self._process_credit_system(world_state)
 
         # 10. Clear all markets and discover prices
-        trades = self.market_manager.clear_all_markets(self.current_tick)
+        self.market_manager.clear_all_markets(self.current_tick)
 
         # 11. Clear order books for next tick (fresh orders each month)
         self._clear_order_books()
@@ -584,21 +620,23 @@ class SimulationEngine:
         self._update_metrics()
 
         # Store metrics history
-        self.metrics_history.append(SimulationMetrics(
-            tick=self.metrics.tick,
-            real_time_months=self.metrics.real_time_months,
-            inflation_rate=self.metrics.inflation_rate,
-            money_supply=self.metrics.money_supply,
-            credit_expansion=self.metrics.credit_expansion,
-            unemployment_rate=self.metrics.unemployment_rate,
-            gdp=self.metrics.gdp,
-            bitcoin_price=self.metrics.bitcoin_price,
-            gold_price=self.metrics.gold_price,
-            central_bank_damage=self.metrics.central_bank_damage,
-            government_damage=self.metrics.government_damage,
-            total_malinvestment=self.metrics.total_malinvestment,
-            freedom_index=self.metrics.freedom_index,
-        ))
+        self.metrics_history.append(
+            SimulationMetrics(
+                tick=self.metrics.tick,
+                real_time_months=self.metrics.real_time_months,
+                inflation_rate=self.metrics.inflation_rate,
+                money_supply=self.metrics.money_supply,
+                credit_expansion=self.metrics.credit_expansion,
+                unemployment_rate=self.metrics.unemployment_rate,
+                gdp=self.metrics.gdp,
+                bitcoin_price=self.metrics.bitcoin_price,
+                gold_price=self.metrics.gold_price,
+                central_bank_damage=self.metrics.central_bank_damage,
+                government_damage=self.metrics.government_damage,
+                total_malinvestment=self.metrics.total_malinvestment,
+                freedom_index=self.metrics.freedom_index,
+            )
+        )
 
         # Callback
         if self.on_tick_complete:
@@ -606,18 +644,25 @@ class SimulationEngine:
 
         # Progress indicator (only for single-country runs, multi-country has its own)
         # Suppress if running as part of multi-country simulation
-        if not hasattr(self, '_multi_country_mode') and self.current_tick % 6 == 0:
-            print(f"  Month {self.current_tick}: Inflation={self.metrics.inflation_rate:.1%} (annualized), "
-                  f"BTC=${self.metrics.bitcoin_price:,.0f}")
+        if not hasattr(self, "_multi_country_mode") and self.current_tick % 6 == 0:
+            print(
+                f"  Month {self.current_tick}: Inflation={self.metrics.inflation_rate:.1%} (annualized), "
+                f"BTC=${self.metrics.bitcoin_price:,.0f}"
+            )
 
-    def _build_world_state(self) -> Dict[str, Any]:
+    def _build_world_state(self) -> dict[str, Any]:
         """Build the world state that agents use for decisions"""
         prices = self.market_manager.get_all_prices()
 
         # Calculate aggregates
         total_income = sum(p.wage for p in self.persons if p.employed)
-        total_consumption = sum(p.wealth * Decimal(str(1 - p.calculate_savings_rate()))
-                               for p in self.persons[:1000]) * 100  # Scale up
+        total_consumption = (
+            sum(
+                p.wealth * Decimal(str(1 - p.calculate_savings_rate()))
+                for p in self.persons[:1000]
+            )
+            * 100
+        )  # Scale up
         employed_count = sum(1 for p in self.persons if p.employed)
         unemployment = 1 - (employed_count / max(1, len(self.persons)))
 
@@ -634,8 +679,12 @@ class SimulationEngine:
             "unemployment": unemployment,
             "bitcoin_price": float(self.metrics.bitcoin_price),
             "gold_price": float(self.metrics.gold_price),
-            "tax_rate_income": self.government.tax_rate_income if self.government else 0.35,
-            "tax_rate_capital": self.government.tax_rate_capital if self.government else 0.20,
+            "tax_rate_income": self.government.tax_rate_income
+            if self.government
+            else 0.35,
+            "tax_rate_capital": self.government.tax_rate_capital
+            if self.government
+            else 0.20,
             "total_income": float(total_income),
             "total_consumption": float(total_consumption),
             "total_capital_gains": float(total_consumption * Decimal("0.1")),
@@ -644,12 +693,13 @@ class SimulationEngine:
             "gdp": float(self.metrics.gdp),
             "failing_banks": [],
             # Use historical GDP growth rate from real-world data
-            "gdp_growth": self.config.historical_gdp_growth / 100,  # Convert % to decimal
+            "gdp_growth": self.config.historical_gdp_growth
+            / 100,  # Convert % to decimal
             "historical_unemployment": self.config.historical_unemployment / 100,
             "material_costs": 50,
         }
 
-    def _process_company_orders(self, world_state: Dict[str, Any]):
+    def _process_company_orders(self, world_state: dict[str, Any]):
         """
         Companies produce goods and submit sell orders to markets.
 
@@ -659,8 +709,12 @@ class SimulationEngine:
         - Malinvestment when prices distorted by central bank
         """
         # Get consumer goods markets
-        consumer_markets = self.market_manager.get_markets_by_type(MarketType.CONSUMER_GOODS)
-        capital_markets = self.market_manager.get_markets_by_type(MarketType.CAPITAL_GOODS)
+        consumer_markets = self.market_manager.get_markets_by_type(
+            MarketType.CONSUMER_GOODS
+        )
+        capital_markets = self.market_manager.get_markets_by_type(
+            MarketType.CAPITAL_GOODS
+        )
 
         # Sample companies for performance
         sample_size = min(1000, len(self.companies))
@@ -674,14 +728,18 @@ class SimulationEngine:
             company.step(world_state)
 
             # Submit sell orders based on production
-            production_value = company.capital_stock * Decimal("0.08")  # Monthly output (~4x weekly)
+            production_value = company.capital_stock * Decimal(
+                "0.08"
+            )  # Monthly output (~4x weekly)
 
             if production_value > 0:
                 # Choose market based on production type
                 if company.production_type == "consumer_goods":
                     target_markets = consumer_markets
                 else:
-                    target_markets = capital_markets if capital_markets else consumer_markets
+                    target_markets = (
+                        capital_markets if capital_markets else consumer_markets
+                    )
 
                 if target_markets:
                     market = random.choice(target_markets)
@@ -699,13 +757,22 @@ class SimulationEngine:
                     supply_adjustment = -0.05 * supply_pressure  # Up to -5%
 
                     # Adjust based on company profitability (profitable = less desperate)
-                    profit_adjustment = 0.03 if company.wealth > Decimal("10000") else -0.02
+                    profit_adjustment = (
+                        0.03 if company.wealth > Decimal("10000") else -0.02
+                    )
 
                     # Random variability for realistic market dynamics (smaller for stability)
                     random_adjustment = random.uniform(-0.03, 0.02)
 
-                    price_factor = base_margin + supply_adjustment + profit_adjustment + random_adjustment
-                    price_factor = max(0.90, min(1.02, price_factor))  # Tighter clamp to 90%-102%
+                    price_factor = (
+                        base_margin
+                        + supply_adjustment
+                        + profit_adjustment
+                        + random_adjustment
+                    )
+                    price_factor = max(
+                        0.90, min(1.02, price_factor)
+                    )  # Tighter clamp to 90%-102%
 
                     min_price = market.current_price * Decimal(str(price_factor))
 
@@ -714,10 +781,10 @@ class SimulationEngine:
                             agent_id=company.id,
                             quantity=quantity,
                             min_price=min_price,
-                            tick=self.current_tick
+                            tick=self.current_tick,
                         )
 
-    def _process_person_orders(self, world_state: Dict[str, Any]):
+    def _process_person_orders(self, world_state: dict[str, Any]):
         """
         Persons make consumption and investment decisions, submit buy orders.
 
@@ -726,7 +793,9 @@ class SimulationEngine:
         - Savings rate affects capital accumulation
         - Bitcoin/Gold as inflation hedge
         """
-        consumer_markets = self.market_manager.get_markets_by_type(MarketType.CONSUMER_GOODS)
+        consumer_markets = self.market_manager.get_markets_by_type(
+            MarketType.CONSUMER_GOODS
+        )
         bitcoin_market = self.market_manager.get_market_by_name("Bitcoin")
         gold_market = self.market_manager.get_market_by_name("Gold (oz)")
 
@@ -750,9 +819,13 @@ class SimulationEngine:
 
             # Calculate monthly budget (4x weekly)
             savings_rate = person.calculate_savings_rate()
-            monthly_income = (person.wage if person.employed else person.wealth * Decimal("0.01")) * Decimal("4")
+            monthly_income = (
+                person.wage if person.employed else person.wealth * Decimal("0.01")
+            ) * Decimal("4")
             consumption_budget = monthly_income * Decimal(str(1 - savings_rate))
-            investment_budget = monthly_income * Decimal(str(savings_rate * 0.3))  # Part of savings goes to assets
+            investment_budget = monthly_income * Decimal(
+                str(savings_rate * 0.3)
+            )  # Part of savings goes to assets
 
             # Submit buy orders for consumer goods with MONTE CARLO VARIABILITY
             if consumption_budget > 0 and consumer_markets:
@@ -774,13 +847,25 @@ class SimulationEngine:
                 demand_adjustment = demand_pressure * 0.03  # Up to +3%
 
                 # Inflation expectation (Austrian: expect money to lose value)
-                inflation_adjustment = min(0.10, inflation_expectation * 0.5)  # Up to +10%
+                inflation_adjustment = min(
+                    0.10, inflation_expectation * 0.5
+                )  # Up to +10%
 
                 # Monte Carlo random variability (smaller for stability)
-                random_adjustment = random.gauss(0, 0.015)  # Normal distribution, σ=1.5%
+                random_adjustment = random.gauss(
+                    0, 0.015
+                )  # Normal distribution, σ=1.5%
 
-                price_factor = base_premium + time_pref_adjustment + demand_adjustment + inflation_adjustment + random_adjustment
-                price_factor = max(0.98, min(1.08, price_factor))  # Tighter clamp 98%-108%
+                price_factor = (
+                    base_premium
+                    + time_pref_adjustment
+                    + demand_adjustment
+                    + inflation_adjustment
+                    + random_adjustment
+                )
+                price_factor = max(
+                    0.98, min(1.08, price_factor)
+                )  # Tighter clamp 98%-108%
 
                 max_price = market.current_price * Decimal(str(price_factor))
 
@@ -789,7 +874,7 @@ class SimulationEngine:
                         agent_id=person.id,
                         quantity=quantity,
                         max_price=max_price,
-                        tick=self.current_tick
+                        tick=self.current_tick,
                     )
 
             # Investment in Bitcoin (based on risk tolerance and inflation expectations)
@@ -798,10 +883,12 @@ class SimulationEngine:
 
                 # Higher allocation if expecting inflation (Bitcoin as hedge)
                 if inflation_expectation > 0.05:
-                    btc_allocation *= (1 + inflation_expectation)
+                    btc_allocation *= 1 + inflation_expectation
 
                 if btc_allocation > 100:  # Minimum investment
-                    quantity = Decimal(str(btc_allocation)) / bitcoin_market.current_price
+                    quantity = (
+                        Decimal(str(btc_allocation)) / bitcoin_market.current_price
+                    )
 
                     # Monte Carlo for BTC price willingness
                     # Crypto buyers more volatile but still reasonable
@@ -813,16 +900,18 @@ class SimulationEngine:
                         agent_id=person.id,
                         quantity=quantity,
                         max_price=max_price,
-                        tick=self.current_tick
+                        tick=self.current_tick,
                     )
 
             # Investment in Gold (more conservative)
             if investment_budget > 0 and gold_market:
-                gold_allocation = (1 - person.risk_tolerance) * float(investment_budget) * 0.3
+                gold_allocation = (
+                    (1 - person.risk_tolerance) * float(investment_budget) * 0.3
+                )
 
                 # Higher allocation if expecting inflation (Gold as hedge)
                 if inflation_expectation > 0.05:
-                    gold_allocation *= (1 + inflation_expectation * 0.5)
+                    gold_allocation *= 1 + inflation_expectation * 0.5
 
                 if gold_allocation > 50:  # Minimum investment
                     quantity = Decimal(str(gold_allocation)) / gold_market.current_price
@@ -837,7 +926,7 @@ class SimulationEngine:
                         agent_id=person.id,
                         quantity=quantity,
                         max_price=max_price,
-                        tick=self.current_tick
+                        tick=self.current_tick,
                     )
 
     def _process_labor_market(self):
@@ -864,7 +953,7 @@ class SimulationEngine:
                     wage=wage_offer,
                     required_skill=0.3,  # Base skill requirement
                     positions=min(positions_needed, 5),  # Max 5 per tick
-                    sector=company.sector
+                    sector=company.sector,
                 )
 
         # Collect job applications from unemployed
@@ -876,11 +965,11 @@ class SimulationEngine:
             self.labor_market.apply_for_job(
                 person_id=person.id,
                 skill_level=person.skill_level,
-                reservation_wage=reservation_wage
+                reservation_wage=reservation_wage,
             )
 
         # Clear labor market
-        result = self.labor_market.clear_market(self.current_tick)
+        self.labor_market.clear_market(self.current_tick)
 
         # Update person states based on matches
         for person in self.persons:
@@ -895,7 +984,7 @@ class SimulationEngine:
                     person.wage = Decimal("0")
                     person.state.employed = False
 
-    def _process_credit_system(self, world_state: Dict[str, Any]):
+    def _process_credit_system(self, world_state: dict[str, Any]):
         """
         Process credit operations - loans and deposits.
 
@@ -906,7 +995,7 @@ class SimulationEngine:
         - Eventually bust corrects the malinvestment
         """
         # Assign banks to agents if not done
-        if not hasattr(self, '_bank_assignments'):
+        if not hasattr(self, "_bank_assignments"):
             self._bank_assignments = {}
             for person in self.persons:
                 self._bank_assignments[person.id] = random.choice(self.banks)
@@ -939,19 +1028,21 @@ class SimulationEngine:
                     bank = self._bank_assignments.get(company.id)
                     if bank and bank.loanable_funds >= loan_amount:
                         # Evaluate and make loan
-                        creditworthiness = min(1.0, float(company.capital_stock) / 100000)
+                        creditworthiness = min(
+                            1.0, float(company.capital_stock) / 100000
+                        )
 
                         if bank.evaluate_loan_application(
                             company.id,
                             loan_amount,
                             company.capital_stock,  # Collateral
-                            creditworthiness
+                            creditworthiness,
                         ):
                             if bank.make_loan(
                                 company.id,
                                 loan_amount,
                                 term_months=12,  # 1 year loan
-                                collateral=company.capital_stock
+                                collateral=company.capital_stock,
                             ):
                                 # Company receives funds
                                 company.state.capital_stock += loan_amount
@@ -970,11 +1061,15 @@ class SimulationEngine:
         total_credit = sum(b.state.credit_created for b in self.banks)
         if total_credit > self.metrics.credit_expansion:
             # Credit is expanding - signal of potential malinvestment
-            expansion_rate = (total_credit - self.metrics.credit_expansion) / max(Decimal("1"), self.metrics.credit_expansion)
+            expansion_rate = (total_credit - self.metrics.credit_expansion) / max(
+                Decimal("1"), self.metrics.credit_expansion
+            )
             if float(expansion_rate) > 0.05:  # 5% expansion per tick is concerning
                 # This could trigger business cycle effects
                 if self.central_bank:
-                    self.central_bank.state.malinvestment_induced += total_credit * Decimal("0.01")
+                    self.central_bank.state.malinvestment_induced += (
+                        total_credit * Decimal("0.01")
+                    )
 
     def _apply_monetary_effects(self):
         """
@@ -996,7 +1091,7 @@ class SimulationEngine:
 
         # Calculate money supply growth rate
         current_money = self.central_bank.state.base_money
-        previous_money = getattr(self, '_previous_money_supply', current_money)
+        previous_money = getattr(self, "_previous_money_supply", current_money)
 
         if previous_money > 0:
             money_growth_rate = float((current_money - previous_money) / previous_money)
@@ -1006,7 +1101,6 @@ class SimulationEngine:
         self._previous_money_supply = current_money
 
         # Get current monetary policy stance
-        policy = self.central_bank.current_policy
         qe_active = self.central_bank.qe_active
         qt_active = self.central_bank.qt_active
 
@@ -1023,9 +1117,13 @@ class SimulationEngine:
         # CB prints money gradually, not all at once
         # For realistic inflation: 2-5% annual = 0.17-0.42% monthly
         # More conservative: only 3% of money growth affects prices per month
-        monthly_money_effect = money_growth_rate * 0.03  # 3% of growth affects prices per month
+        monthly_money_effect = (
+            money_growth_rate * 0.03
+        )  # 3% of growth affects prices per month
         # Cap the effect to prevent runaway inflation in early ticks
-        monthly_money_effect = max(-0.02, min(0.02, monthly_money_effect))  # ±2% max per month
+        monthly_money_effect = max(
+            -0.02, min(0.02, monthly_money_effect)
+        )  # ±2% max per month
 
         for market in self.market_manager.markets.values():
             old_price = market.current_price
@@ -1048,17 +1146,20 @@ class SimulationEngine:
                     if cycle_year > 4:
                         cycle_year = 1
 
-
                 if cycle_year == 1:
                     # YEAR 1: BULL RUN (new president)
                     # Historical: ~80-150% annual = 5-8% monthly
                     btc_monthly = 0.05 + random.gauss(0, 0.025)
-                    btc_monthly = max(0.0, min(0.08, btc_monthly))  # 0-8% (never negative in bull)
+                    btc_monthly = max(
+                        0.0, min(0.08, btc_monthly)
+                    )  # 0-8% (never negative in bull)
                 elif cycle_year == 2:
                     # YEAR 2: BEAR MARKET
                     # Historical: -20% to -40% annual = -2% to -4% monthly
                     btc_monthly = -0.025 + random.gauss(0, 0.015)
-                    btc_monthly = max(-0.05, min(0.0, btc_monthly))  # -5% to 0% (never positive in bear)
+                    btc_monthly = max(
+                        -0.05, min(0.0, btc_monthly)
+                    )  # -5% to 0% (never positive in bear)
                 elif cycle_year == 3:
                     # YEAR 3: RECOVERY
                     # Historical: +20-40% annual = 1.5-3% monthly
@@ -1094,7 +1195,9 @@ class SimulationEngine:
                     # Realistic: ~10-20% annual appreciation during QE
                     if qe_active:
                         gold_multiplier = 0.8 + random.gauss(0, 0.1)
-                        price_factor = Decimal(str(1 + monthly_money_effect * gold_multiplier))
+                        price_factor = Decimal(
+                            str(1 + monthly_money_effect * gold_multiplier)
+                        )
                     else:
                         price_factor = Decimal(str(1 + monthly_money_effect * 0.4))
 
@@ -1121,7 +1224,9 @@ class SimulationEngine:
                 else:
                     # Consumer goods: sticky - don't fall much
                     # This is why QT "works" to control measured inflation
-                    price_factor = Decimal(str(max(0.995, 1 + monthly_money_effect * 0.1)))
+                    price_factor = Decimal(
+                        str(max(0.995, 1 + monthly_money_effect * 0.1))
+                    )
 
             else:
                 # Neutral monetary policy: small random walk for non-crypto markets
@@ -1179,7 +1284,9 @@ class SimulationEngine:
 
                 # Tariff effect is gradual (pass-through takes time)
                 # Each tick applies a portion of the tariff impact
-                monthly_impact = 1 + (impact_multiplier - 1) * 0.3  # 30% pass-through per month (~10%/week * 4)
+                monthly_impact = (
+                    1 + (impact_multiplier - 1) * 0.3
+                )  # 30% pass-through per month (~10%/week * 4)
 
                 # Add some randomness for realistic market dynamics
                 monthly_impact *= random.uniform(0.98, 1.02)
@@ -1201,7 +1308,7 @@ class SimulationEngine:
         for market in self.market_manager.markets.values():
             market.order_book.clear()
 
-    def _update_business_cycle(self, world_state: Dict[str, Any]):
+    def _update_business_cycle(self, world_state: dict[str, Any]):
         """
         Update the Austrian Business Cycle state.
 
@@ -1216,8 +1323,12 @@ class SimulationEngine:
         previous_credit = self.metrics.credit_expansion
 
         # Investment metrics (from markets)
-        capital_markets = self.market_manager.get_markets_by_type(MarketType.CAPITAL_GOODS)
-        consumer_markets = self.market_manager.get_markets_by_type(MarketType.CONSUMER_GOODS)
+        capital_markets = self.market_manager.get_markets_by_type(
+            MarketType.CAPITAL_GOODS
+        )
+        consumer_markets = self.market_manager.get_markets_by_type(
+            MarketType.CONSUMER_GOODS
+        )
 
         capital_investment = sum(m.volume for m in capital_markets)
         consumer_investment = sum(m.volume for m in consumer_markets)
@@ -1239,13 +1350,13 @@ class SimulationEngine:
             capital_goods_investment=capital_investment,
             consumer_goods_investment=consumer_investment,
             total_malinvestment=malinvestment,
-            liquidations=liquidations
+            liquidations=liquidations,
         )
 
         # Apply cycle effects to agents
         self._apply_cycle_effects(cycle_signals)
 
-    def _apply_cycle_effects(self, cycle_signals: Dict[str, Any]):
+    def _apply_cycle_effects(self, cycle_signals: dict[str, Any]):
         """
         Apply business cycle effects to agents.
 
@@ -1260,7 +1371,7 @@ class SimulationEngine:
             # Companies are misled into expanding
             for company in random.sample(self.companies, min(100, len(self.companies))):
                 # Increase desire to invest (will lead to malinvestment)
-                company.time_preference *= (1 - boom_intensity * 0.1)
+                company.time_preference *= 1 - boom_intensity * 0.1
 
         elif phase == "bust":
             # Liquidation of malinvestment
@@ -1284,7 +1395,8 @@ class SimulationEngine:
                             correction = company.state.debt * Decimal("0.1")
                             self.central_bank.state.malinvestment_induced = max(
                                 Decimal("0"),
-                                self.central_bank.state.malinvestment_induced - correction
+                                self.central_bank.state.malinvestment_induced
+                                - correction,
                             )
 
         elif phase == "trough":
@@ -1329,7 +1441,9 @@ class SimulationEngine:
         # Damage metrics
         if self.central_bank:
             self.metrics.central_bank_damage = self.central_bank.total_damage_caused
-            self.metrics.total_malinvestment = self.central_bank.state.malinvestment_induced
+            self.metrics.total_malinvestment = (
+                self.central_bank.state.malinvestment_induced
+            )
 
         if self.government:
             # Use total_damage_caused which includes ALL damage types:
@@ -1378,7 +1492,7 @@ class SimulationEngine:
     # SCENARIOS
     # ===========================================
 
-    def apply_scenario(self, scenario_name: str, parameters: Dict[str, Any]):
+    def apply_scenario(self, scenario_name: str, parameters: dict[str, Any]):
         """
         Apply a what-if scenario.
 
@@ -1391,21 +1505,27 @@ class SimulationEngine:
             if self.central_bank:
                 current_base = self.central_bank.state.base_money
                 self.central_bank.print_money(current_base)
-                print(f"Scenario: FED doubled money supply to "
-                      f"${self.central_bank.state.base_money}")
+                print(
+                    f"Scenario: FED doubled money supply to "
+                    f"${self.central_bank.state.base_money}"
+                )
 
         elif scenario_name == "ancap_transition":
             if self.government:
                 result = self.government.change_regime(RegimeType.ANCAP)
-                print(f"Scenario: Transitioned to Ancap. "
-                      f"Freedom Index: {result['new_freedom_index']}")
+                print(
+                    f"Scenario: Transitioned to Ancap. "
+                    f"Freedom Index: {result['new_freedom_index']}"
+                )
 
         elif scenario_name == "increase_taxes":
             tax_increase = parameters.get("increase", 0.1)
             if self.government:
                 self.government.tax_rate_income += tax_increase
-                print(f"Scenario: Increased income tax to "
-                      f"{self.government.tax_rate_income:.0%}")
+                print(
+                    f"Scenario: Increased income tax to "
+                    f"{self.government.tax_rate_income:.0%}"
+                )
 
         elif scenario_name == "regime_change":
             new_regime = parameters.get("regime", RegimeType.MINARCHY)
@@ -1437,7 +1557,7 @@ class SimulationEngine:
                 self.government.set_sector_tariff("steel", 0.50)
                 self.government.set_sector_tariff("automotive", 0.25)
                 print("Scenario: Trump-style tariffs activated")
-                print(f"  - General: 20%, Electronics: 35%, Steel: 50%, Auto: 25%")
+                print("  - General: 20%, Electronics: 35%, Steel: 50%, Auto: 25%")
 
         elif scenario_name == "election_year":
             # Force election year dynamics
@@ -1454,9 +1574,9 @@ class SimulationEngine:
                 # Print 10x the money supply
                 for _ in range(10):
                     self.central_bank.print_money(current_base)
-                print(f"Scenario: Hyperinflation - money supply increased 10x")
+                print("Scenario: Hyperinflation - money supply increased 10x")
 
-    def get_damage_summary(self) -> Dict[str, Any]:
+    def get_damage_summary(self) -> dict[str, Any]:
         """Get summary of all damage caused by interventions"""
         cb_report = self.central_bank.get_damage_report() if self.central_bank else {}
         gov_report = self.government.get_damage_report() if self.government else {}
@@ -1488,7 +1608,7 @@ class SimulationEngine:
     # REPORTING
     # ===========================================
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get simulation summary"""
         # Business cycle signals
         cycle_signals = self.business_cycle._get_cycle_signals()
@@ -1520,10 +1640,12 @@ class SimulationEngine:
 # MULTI-COUNTRY SIMULATION ENGINE
 # ===========================================
 
+
 @dataclass
 class MultiCountryConfig:
     """Configuration for multi-country simulation"""
-    countries: List[str] = field(default_factory=lambda: ["USA"])
+
+    countries: list[str] = field(default_factory=lambda: ["USA"])
     base_num_persons: int = 100_000  # USA baseline, others scaled by GDP
     base_num_companies: int = 10_000
     base_num_banks: int = 500
@@ -1535,13 +1657,14 @@ class MultiCountryConfig:
 @dataclass
 class MultiCountryMetrics:
     """Metrics for multi-country simulation"""
-    tick: int = 0
-    country_metrics: Dict[str, SimulationMetrics] = field(default_factory=dict)
-    global_metrics: Dict[str, Any] = field(default_factory=dict)
-    war_risks: List[Dict[str, Any]] = field(default_factory=list)
-    influence_effects: Dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    tick: int = 0
+    country_metrics: dict[str, SimulationMetrics] = field(default_factory=dict)
+    global_metrics: dict[str, Any] = field(default_factory=dict)
+    war_risks: list[dict[str, Any]] = field(default_factory=list)
+    influence_effects: dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tick": self.tick,
             "countries": {k: v.to_dict() for k, v in self.country_metrics.items()},
@@ -1569,19 +1692,19 @@ class MultiCountrySimulationEngine:
     - Wars destroy capital and increase state power
     """
 
-    def __init__(self, config: Optional[MultiCountryConfig] = None):
-        from src.countries.registry import get_country_config, get_all_countries
+    def __init__(self, config: MultiCountryConfig | None = None):
+        from src.countries.registry import get_country_config
+        from src.data.collectors.country_collector import MultiCountryCollector
+        from src.geopolitics.influence import InfluenceCalculator
         from src.geopolitics.relationships import RelationshipManager
         from src.geopolitics.war_probability import WarProbabilityCalculator
-        from src.geopolitics.influence import InfluenceCalculator
-        from src.data.collectors.country_collector import MultiCountryCollector
 
         self.config = config or MultiCountryConfig()
         self.state = SimulationState.IDLE
         self.current_tick = 0
 
         # Country engines (one per country)
-        self.country_engines: Dict[str, SimulationEngine] = {}
+        self.country_engines: dict[str, SimulationEngine] = {}
 
         # Geopolitics
         self.relationship_manager = RelationshipManager()
@@ -1593,22 +1716,21 @@ class MultiCountrySimulationEngine:
 
         # Metrics
         self.metrics = MultiCountryMetrics()
-        self.metrics_history: List[MultiCountryMetrics] = []
+        self.metrics_history: list[MultiCountryMetrics] = []
 
         # Country configs
-        self._country_configs: Dict[str, Any] = {}
+        self._country_configs: dict[str, Any] = {}
         for country in self.config.countries:
-            try:
+            with contextlib.suppress(Exception):
                 self._country_configs[country] = get_country_config(country)
-            except Exception:
-                pass
 
     def initialize(self):
         """Initialize all country simulations"""
-        from src.countries.registry import get_country_config
         from src.data.real_world_conditions import RealWorldConditionsCollector
 
-        print(f"Initializing multi-country simulation for {len(self.config.countries)} countries...")
+        print(
+            f"Initializing multi-country simulation for {len(self.config.countries)} countries..."
+        )
 
         for country in self.config.countries:
             print(f"\n--- Initializing {country} ---")
@@ -1618,8 +1740,12 @@ class MultiCountrySimulationEngine:
 
             # Get historical data for this country
             conditions_collector = RealWorldConditionsCollector(country)
-            historical_gdp_growth = conditions_collector.HISTORICAL_GDP_GROWTH.get(country, 2.0)
-            historical_unemployment = conditions_collector.HISTORICAL_UNEMPLOYMENT.get(country, 7.0)
+            historical_gdp_growth = conditions_collector.HISTORICAL_GDP_GROWTH.get(
+                country, 2.0
+            )
+            historical_unemployment = conditions_collector.HISTORICAL_UNEMPLOYMENT.get(
+                country, 7.0
+            )
 
             # Calculate scale based on GDP (USA = 1.0)
             if self.config.scale_by_gdp and country_config:
@@ -1636,8 +1762,12 @@ class MultiCountrySimulationEngine:
                 num_persons=int(self.config.base_num_persons * scale),
                 num_companies=int(self.config.base_num_companies * scale),
                 num_banks=max(10, int(self.config.base_num_banks * scale)),
-                regime_type=country_config.regime_type if country_config else RegimeType.DEMOCRACY_LIBERAL,
-                central_bank_intervention=country_config.intervention_level if country_config else 0.5,
+                regime_type=country_config.regime_type
+                if country_config
+                else RegimeType.DEMOCRACY_LIBERAL,
+                central_bank_intervention=country_config.intervention_level
+                if country_config
+                else 0.5,
                 ticks_per_run=self.config.ticks_per_run,
                 use_real_data=self.config.use_real_data,
                 historical_gdp_growth=historical_gdp_growth,
@@ -1654,10 +1784,12 @@ class MultiCountrySimulationEngine:
             print(f"  Historical GDP Growth: {historical_gdp_growth:.1f}%")
             print(f"  Historical Unemployment: {historical_unemployment:.1f}%")
 
-        print(f"\nMulti-country simulation initialized with {len(self.country_engines)} countries")
+        print(
+            f"\nMulti-country simulation initialized with {len(self.country_engines)} countries"
+        )
         self.state = SimulationState.IDLE
 
-    def run(self, ticks: Optional[int] = None) -> List[MultiCountryMetrics]:
+    def run(self, ticks: int | None = None) -> list[MultiCountryMetrics]:
         """
         Run multi-country simulation.
 
@@ -1716,28 +1848,29 @@ class MultiCountrySimulationEngine:
         if self.current_tick % 3 == 0:
             self._print_progress()
 
-    def _calculate_influences(self) -> Dict[str, Dict[str, float]]:
+    def _calculate_influences(self) -> dict[str, dict[str, float]]:
         """
         Calculate how each country influences others this tick.
 
         Returns:
             Dict[target_country][influence_type] = magnitude
         """
-        influences: Dict[str, Dict[str, float]] = {c: {} for c in self.config.countries}
+        influences: dict[str, dict[str, float]] = {c: {} for c in self.config.countries}
 
         # Get relationships for influence calculation
         relationships = {}
         for country_a in self.config.countries:
             for country_b in self.config.countries:
                 if country_a != country_b:
-                    rel = self.relationship_manager.get_relationship(country_a, country_b)
+                    rel = self.relationship_manager.get_relationship(
+                        country_a, country_b
+                    )
                     if rel:
                         relationships[(country_a, country_b)] = rel
 
         # Calculate influence matrix
         matrix = self.influence_calculator.calculate_influence_matrix(
-            self.config.countries,
-            relationships
+            self.config.countries, relationships
         )
 
         # Convert to per-country influences
@@ -1775,7 +1908,9 @@ class MultiCountrySimulationEngine:
                     avg_tariff = (rel.tariff_a_to_b + rel.tariff_b_to_a) / 2
 
                     # Reduce trade volume by tariff effect
-                    trade_reduction = 1 - (avg_tariff * 0.5)  # 50% tariff = 25% trade reduction
+                    trade_reduction = 1 - (
+                        avg_tariff * 0.5
+                    )  # 50% tariff = 25% trade reduction
                     rel.trade_volume_usd *= Decimal(str(trade_reduction))
 
                     # Track damage in both governments
@@ -1783,16 +1918,20 @@ class MultiCountrySimulationEngine:
                     engine_b = self.country_engines.get(country_b)
 
                     if engine_a and engine_a.government:
-                        engine_a.government.state.trade_disruption += rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+                        engine_a.government.state.trade_disruption += (
+                            rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+                        )
                     if engine_b and engine_b.government:
-                        engine_b.government.state.trade_disruption += rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+                        engine_b.government.state.trade_disruption += (
+                            rel.trade_volume_usd * Decimal(str(avg_tariff * 0.01))
+                        )
 
                 # Sanctions effect
                 if rel.has_active_sanctions:
                     # Severe trade reduction
                     rel.trade_volume_usd *= Decimal("0.95")  # 5% reduction per tick
 
-    def _update_war_probabilities(self) -> List[Dict[str, Any]]:
+    def _update_war_probabilities(self) -> list[dict[str, Any]]:
         """
         Update war probabilities for all country pairs.
 
@@ -1823,12 +1962,16 @@ class MultiCountrySimulationEngine:
 
                 # Track high risk pairs
                 if assessment.probability >= 0.03:  # 3%+
-                    high_risk.append({
-                        "countries": [country_a, country_b],
-                        "probability": assessment.probability,
-                        "risk_level": assessment.risk_level,
-                        "triggers": [t.value for t in assessment.primary_triggers[:2]],
-                    })
+                    high_risk.append(
+                        {
+                            "countries": [country_a, country_b],
+                            "probability": assessment.probability,
+                            "risk_level": assessment.risk_level,
+                            "triggers": [
+                                t.value for t in assessment.primary_triggers[:2]
+                            ],
+                        }
+                    )
 
         return sorted(high_risk, key=lambda x: x["probability"], reverse=True)
 
@@ -1874,12 +2017,12 @@ class MultiCountrySimulationEngine:
                         if target_engine:
                             # Increase fear/time preference
                             for person in target_engine.persons[:100]:
-                                person.time_preference = min(0.9, person.time_preference + impact * 0.1)
+                                person.time_preference = min(
+                                    0.9, person.time_preference + impact * 0.1
+                                )
 
     def _update_metrics(
-        self,
-        war_risks: List[Dict[str, Any]],
-        influences: Dict[str, Dict[str, float]]
+        self, war_risks: list[dict[str, Any]], influences: dict[str, dict[str, float]]
     ):
         """Update multi-country metrics"""
         self.metrics.tick = self.current_tick
@@ -1892,10 +2035,18 @@ class MultiCountrySimulationEngine:
 
         # Calculate global metrics
         total_gdp = sum(e.metrics.gdp for e in self.country_engines.values())
-        avg_inflation = sum(e.metrics.inflation_rate for e in self.country_engines.values()) / len(self.country_engines)
-        avg_freedom = sum(e.metrics.freedom_index for e in self.country_engines.values()) / len(self.country_engines)
-        total_cb_damage = sum(e.metrics.central_bank_damage for e in self.country_engines.values())
-        total_gov_damage = sum(e.metrics.government_damage for e in self.country_engines.values())
+        avg_inflation = sum(
+            e.metrics.inflation_rate for e in self.country_engines.values()
+        ) / len(self.country_engines)
+        avg_freedom = sum(
+            e.metrics.freedom_index for e in self.country_engines.values()
+        ) / len(self.country_engines)
+        total_cb_damage = sum(
+            e.metrics.central_bank_damage for e in self.country_engines.values()
+        )
+        total_gov_damage = sum(
+            e.metrics.government_damage for e in self.country_engines.values()
+        )
 
         self.metrics.global_metrics = {
             "total_gdp": str(total_gdp),
@@ -1908,32 +2059,41 @@ class MultiCountrySimulationEngine:
 
         # Store influence effects
         self.metrics.influence_effects = {
-            k: v.get("total_external", 0.0)
-            for k, v in influences.items()
+            k: v.get("total_external", 0.0) for k, v in influences.items()
         }
 
         # Store history (deep copy to ensure historical values are preserved)
-        self.metrics_history.append(MultiCountryMetrics(
-            tick=self.metrics.tick,
-            country_metrics=copy.deepcopy(self.metrics.country_metrics),
-            global_metrics=self.metrics.global_metrics.copy(),
-            war_risks=self.metrics.war_risks.copy() if self.metrics.war_risks else [],
-            influence_effects=self.metrics.influence_effects.copy() if self.metrics.influence_effects else {},
-        ))
+        self.metrics_history.append(
+            MultiCountryMetrics(
+                tick=self.metrics.tick,
+                country_metrics=copy.deepcopy(self.metrics.country_metrics),
+                global_metrics=self.metrics.global_metrics.copy(),
+                war_risks=self.metrics.war_risks.copy()
+                if self.metrics.war_risks
+                else [],
+                influence_effects=self.metrics.influence_effects.copy()
+                if self.metrics.influence_effects
+                else {},
+            )
+        )
 
     def _print_progress(self):
         """Print progress indicator"""
         print(f"\n--- Month {self.current_tick} ---")
         for country, engine in list(self.country_engines.items())[:5]:  # Top 5
-            print(f"  {country}: Inflation={engine.metrics.inflation_rate:.1%}, "
-                  f"Freedom={engine.metrics.freedom_index:.0f}")
+            print(
+                f"  {country}: Inflation={engine.metrics.inflation_rate:.1%}, "
+                f"Freedom={engine.metrics.freedom_index:.0f}"
+            )
 
         if self.metrics.war_risks:
             highest = self.metrics.war_risks[0]
-            print(f"  Highest war risk: {highest['countries'][0]}-{highest['countries'][1]} "
-                  f"({highest['probability']:.1%})")
+            print(
+                f"  Highest war risk: {highest['countries'][0]}-{highest['countries'][1]} "
+                f"({highest['probability']:.1%})"
+            )
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get multi-country simulation summary"""
         country_summaries = {}
         for country, engine in self.country_engines.items():
@@ -1958,13 +2118,15 @@ class MultiCountrySimulationEngine:
             "relationship_summary": self.relationship_manager.get_summary(),
         }
 
-    def get_war_risk_report(self) -> Dict[str, Any]:
+    def get_war_risk_report(self) -> dict[str, Any]:
         """Get detailed war risk report"""
         relationships = {}
         for country_a in self.config.countries:
             for country_b in self.config.countries:
                 if country_a != country_b:
-                    rel = self.relationship_manager.get_relationship(country_a, country_b)
+                    rel = self.relationship_manager.get_relationship(
+                        country_a, country_b
+                    )
                     if rel:
                         relationships[(country_a, country_b)] = rel
 
@@ -1977,9 +2139,8 @@ class MultiCountrySimulationEngine:
         }
 
     def compare_countries(
-        self,
-        countries: Optional[List[str]] = None
-    ) -> Dict[str, Dict[str, Any]]:
+        self, countries: list[str] | None = None
+    ) -> dict[str, dict[str, Any]]:
         """Compare metrics across countries"""
         countries = countries or list(self.country_engines.keys())
 
@@ -1998,10 +2159,10 @@ class MultiCountrySimulationEngine:
                 }
 
         # Sort by freedom index (Austrian preference)
-        sorted_comparison = dict(sorted(
-            comparison.items(),
-            key=lambda x: x[1]["freedom_index"],
-            reverse=True
-        ))
+        sorted_comparison = dict(
+            sorted(
+                comparison.items(), key=lambda x: x[1]["freedom_index"], reverse=True
+            )
+        )
 
         return sorted_comparison

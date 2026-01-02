@@ -12,33 +12,34 @@ Austrian Theory Relevance:
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Any, Tuple, Optional
 from enum import Enum
 
-from src.countries.base import CountryConfig, BilateralRelationship, RelationType
+from src.countries.base import BilateralRelationship
 
 
 class InfluenceType(str, Enum):
     """Types of economic influence"""
-    MONETARY = "monetary"           # Central bank policy transmission
-    TRADE = "trade"                 # Export/import price effects
-    COMMODITY = "commodity"         # Commodity price shocks
-    FINANCIAL = "financial"         # Capital flows, interest rates
-    CURRENCY = "currency"           # Exchange rate effects
-    SENTIMENT = "sentiment"         # Market contagion
-    CRISIS = "crisis"               # Crisis propagation
+
+    MONETARY = "monetary"  # Central bank policy transmission
+    TRADE = "trade"  # Export/import price effects
+    COMMODITY = "commodity"  # Commodity price shocks
+    FINANCIAL = "financial"  # Capital flows, interest rates
+    CURRENCY = "currency"  # Exchange rate effects
+    SENTIMENT = "sentiment"  # Market contagion
+    CRISIS = "crisis"  # Crisis propagation
 
 
 @dataclass
 class InfluenceResult:
     """Result of influence calculation between two countries"""
+
     source_country: str
     target_country: str
     influence_type: InfluenceType
-    magnitude: float                # 0-1 (how much influence)
-    direction: str                  # "positive", "negative", "neutral"
-    transmission_channels: List[str]
-    lag_months: int                 # How long for effect to manifest
+    magnitude: float  # 0-1 (how much influence)
+    direction: str  # "positive", "negative", "neutral"
+    transmission_channels: list[str]
+    lag_months: int  # How long for effect to manifest
 
 
 class CountrySensitivities:
@@ -55,60 +56,60 @@ class CountrySensitivities:
 
     SENSITIVITIES = {
         "USA": {
-            "usd_sensitivity": 0.0,      # Is the USD issuer
-            "inflation_memory": 0.3,     # Low memory (1970s long ago)
-            "commodity_exposure": 0.3,   # Net importer but diversified
-            "china_dependency": 0.4,     # Significant trade
+            "usd_sensitivity": 0.0,  # Is the USD issuer
+            "inflation_memory": 0.3,  # Low memory (1970s long ago)
+            "commodity_exposure": 0.3,  # Net importer but diversified
+            "china_dependency": 0.4,  # Significant trade
             "geopolitical_volatility": 0.3,
         },
         "ARG": {
-            "usd_sensitivity": 0.95,     # Highly dollarized, USD debt
-            "inflation_memory": 0.98,    # Hyperinflation trauma (multiple)
-            "commodity_exposure": 0.7,   # Agro exporter
+            "usd_sensitivity": 0.95,  # Highly dollarized, USD debt
+            "inflation_memory": 0.98,  # Hyperinflation trauma (multiple)
+            "commodity_exposure": 0.7,  # Agro exporter
             "china_dependency": 0.3,
             "geopolitical_volatility": 0.6,
-            "imf_trauma": 0.9,           # Historical IMF issues
+            "imf_trauma": 0.9,  # Historical IMF issues
         },
         "BRA": {
             "usd_sensitivity": 0.6,
-            "inflation_memory": 0.75,    # Plano Real 1994
-            "commodity_exposure": 0.8,   # Soy, iron ore, oil
-            "china_dependency": 0.85,    # Largest trade partner
+            "inflation_memory": 0.75,  # Plano Real 1994
+            "commodity_exposure": 0.8,  # Soy, iron ore, oil
+            "china_dependency": 0.85,  # Largest trade partner
             "geopolitical_volatility": 0.5,
         },
         "TUR": {
-            "usd_sensitivity": 0.85,     # USD debt, weak lira
+            "usd_sensitivity": 0.85,  # USD debt, weak lira
             "inflation_memory": 0.8,
             "commodity_exposure": 0.6,
             "geopolitical_volatility": 0.9,
             "erdogan_policy_risk": 0.9,  # Unorthodox monetary policy
         },
         "RUS": {
-            "usd_sensitivity": 0.5,      # De-dollarizing
+            "usd_sensitivity": 0.5,  # De-dollarizing
             "inflation_memory": 0.6,
-            "oil_dependency": 0.85,      # Major oil/gas exporter
+            "oil_dependency": 0.85,  # Major oil/gas exporter
             "sanctions_impact": 0.7,
             "china_pivot": 0.6,
         },
         "JPN": {
             "usd_sensitivity": 0.4,
-            "deflation_history": 0.8,    # Lost decades
+            "deflation_history": 0.8,  # Lost decades
             "yen_carry_trade": 0.7,
             "aging_population_drag": 0.8,
             "china_dependency": 0.5,
         },
         "CHN": {
-            "usd_sensitivity": 0.5,      # Manages CNY vs USD
-            "commodity_exposure": 0.8,   # Major importer
+            "usd_sensitivity": 0.5,  # Manages CNY vs USD
+            "commodity_exposure": 0.8,  # Major importer
             "export_dependency": 0.6,
             "property_bubble_risk": 0.7,
             "us_trade_sensitivity": 0.6,
         },
         "DEU": {
-            "usd_sensitivity": 0.3,      # Euro zone
-            "china_dependency": 0.6,     # Export market
-            "russia_energy": 0.4,        # Reduced after 2022
-            "inflation_memory": 0.5,     # Weimar, but long ago
+            "usd_sensitivity": 0.3,  # Euro zone
+            "china_dependency": 0.6,  # Export market
+            "russia_energy": 0.4,  # Reduced after 2022
+            "inflation_memory": 0.5,  # Weimar, but long ago
         },
         "GBR": {
             "usd_sensitivity": 0.4,
@@ -117,19 +118,19 @@ class CountrySensitivities:
             "financial_sector_exposure": 0.7,
         },
         "CHE": {
-            "usd_sensitivity": 0.2,      # Safe haven
-            "safe_haven_flows": 0.9,     # Receives crisis flows
+            "usd_sensitivity": 0.2,  # Safe haven
+            "safe_haven_flows": 0.9,  # Receives crisis flows
             "euro_dependency": 0.6,
-            "inflation_memory": 0.2,     # Very low
+            "inflation_memory": 0.2,  # Very low
         },
         "SAU": {
             "oil_price_sensitivity": 0.95,  # Oil economy
-            "usd_peg": 0.9,                 # SAR pegged to USD
+            "usd_peg": 0.9,  # SAR pegged to USD
             "geopolitical_volatility": 0.6,
         },
         "IND": {
             "usd_sensitivity": 0.5,
-            "oil_import_dependency": 0.8,   # Major importer
+            "oil_import_dependency": 0.8,  # Major importer
             "china_rivalry": 0.6,
             "inflation_memory": 0.5,
         },
@@ -164,7 +165,7 @@ class CountrySensitivities:
         return country_data.get(factor, 0.5)  # Default 0.5
 
     @classmethod
-    def get_all_sensitivities(cls, country: str) -> Dict[str, float]:
+    def get_all_sensitivities(cls, country: str) -> dict[str, float]:
         """Get all sensitivities for a country"""
         return cls.SENSITIVITIES.get(country, {})
 
@@ -203,13 +204,10 @@ class InfluenceCalculator:
     }
 
     def __init__(self):
-        self._influence_cache: Dict[Tuple[str, str], List[InfluenceResult]] = {}
+        self._influence_cache: dict[tuple[str, str], list[InfluenceResult]] = {}
 
     def calculate_trade_influence(
-        self,
-        source: str,
-        target: str,
-        trade_volume: Decimal
+        self, source: str, target: str, trade_volume: Decimal
     ) -> InfluenceResult:
         """
         Calculate trade-based influence.
@@ -230,11 +228,7 @@ class InfluenceCalculator:
             lag_months=1,
         )
 
-    def calculate_monetary_influence(
-        self,
-        source: str,
-        target: str
-    ) -> InfluenceResult:
+    def calculate_monetary_influence(self, source: str, target: str) -> InfluenceResult:
         """
         Calculate monetary policy influence.
 
@@ -252,7 +246,11 @@ class InfluenceCalculator:
                 influence_type=InfluenceType.MONETARY,
                 magnitude=target_usd_sensitivity * 0.8,
                 direction="negative",  # Fed tightening hurts EM
-                transmission_channels=["interest_rate_differential", "capital_flows", "currency"],
+                transmission_channels=[
+                    "interest_rate_differential",
+                    "capital_flows",
+                    "currency",
+                ],
                 lag_months=2,
             )
 
@@ -295,10 +293,8 @@ class InfluenceCalculator:
         )
 
     def calculate_commodity_influence(
-        self,
-        source: str,
-        target: str
-    ) -> Optional[InfluenceResult]:
+        self, source: str, target: str
+    ) -> InfluenceResult | None:
         """
         Calculate commodity price influence.
 
@@ -329,10 +325,7 @@ class InfluenceCalculator:
         )
 
     def calculate_crisis_contagion(
-        self,
-        source: str,
-        target: str,
-        trade_volume: Decimal
+        self, source: str, target: str, trade_volume: Decimal
     ) -> InfluenceResult:
         """
         Calculate crisis contagion risk.
@@ -378,8 +371,8 @@ class InfluenceCalculator:
         self,
         source: str,
         target: str,
-        relationship: Optional[BilateralRelationship] = None
-    ) -> List[InfluenceResult]:
+        relationship: BilateralRelationship | None = None,
+    ) -> list[InfluenceResult]:
         """
         Calculate all types of influence from source to target.
 
@@ -388,7 +381,9 @@ class InfluenceCalculator:
         """
         results = []
 
-        trade_volume = relationship.trade_volume_usd if relationship else Decimal("10000000000")
+        trade_volume = (
+            relationship.trade_volume_usd if relationship else Decimal("10000000000")
+        )
 
         # Trade influence
         results.append(self.calculate_trade_influence(source, target, trade_volume))
@@ -408,16 +403,16 @@ class InfluenceCalculator:
 
     def calculate_influence_matrix(
         self,
-        countries: List[str],
-        relationships: Dict[Tuple[str, str], BilateralRelationship]
-    ) -> Dict[str, Dict[str, float]]:
+        countries: list[str],
+        relationships: dict[tuple[str, str], BilateralRelationship],
+    ) -> dict[str, dict[str, float]]:
         """
         Calculate influence matrix for all country pairs.
 
         Returns:
             Dict[source][target] = total_influence (0-1)
         """
-        matrix = {c: {t: 0.0 for t in countries} for c in countries}
+        matrix = {c: dict.fromkeys(countries, 0.0) for c in countries}
 
         for source in countries:
             for target in countries:
@@ -435,9 +430,9 @@ class InfluenceCalculator:
 
     def get_most_influential_countries(
         self,
-        countries: List[str],
-        relationships: Dict[Tuple[str, str], BilateralRelationship]
-    ) -> List[Tuple[str, float]]:
+        countries: list[str],
+        relationships: dict[tuple[str, str], BilateralRelationship],
+    ) -> list[tuple[str, float]]:
         """
         Get countries ranked by total outbound influence.
 
@@ -454,9 +449,9 @@ class InfluenceCalculator:
 
     def get_most_influenced_countries(
         self,
-        countries: List[str],
-        relationships: Dict[Tuple[str, str], BilateralRelationship]
-    ) -> List[Tuple[str, float]]:
+        countries: list[str],
+        relationships: dict[tuple[str, str], BilateralRelationship],
+    ) -> list[tuple[str, float]]:
         """
         Get countries ranked by total inbound influence (vulnerability).
 
@@ -475,9 +470,9 @@ class InfluenceCalculator:
         self,
         source: str,
         shock_magnitude: float,
-        countries: List[str],
-        relationships: Dict[Tuple[str, str], BilateralRelationship]
-    ) -> Dict[str, float]:
+        countries: list[str],
+        relationships: dict[tuple[str, str], BilateralRelationship],
+    ) -> dict[str, float]:
         """
         Simulate how a shock in one country propagates.
 
@@ -491,18 +486,22 @@ class InfluenceCalculator:
             Dict[country] = impact (0-1)
         """
         matrix = self.calculate_influence_matrix(countries, relationships)
-        impacts = {c: 0.0 for c in countries}
+        impacts = dict.fromkeys(countries, 0.0)
         impacts[source] = shock_magnitude
 
         # Propagate through 3 rounds (direct + 2 indirect)
-        for round in range(3):
+        for _round in range(3):
             new_impacts = impacts.copy()
             for affected, current_impact in impacts.items():
                 if current_impact > 0.01:  # Only propagate significant impacts
                     for target in countries:
                         if target != affected:
-                            transmission = matrix[affected][target] * current_impact * 0.5
-                            new_impacts[target] = min(1.0, new_impacts[target] + transmission)
+                            transmission = (
+                                matrix[affected][target] * current_impact * 0.5
+                            )
+                            new_impacts[target] = min(
+                                1.0, new_impacts[target] + transmission
+                            )
             impacts = new_impacts
 
         return impacts

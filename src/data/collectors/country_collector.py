@@ -10,9 +10,10 @@ Austrian Theory Relevance:
 """
 
 from dataclasses import dataclass
-from decimal import Decimal
-from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
 import yfinance as yf
 
 from .forex import ForexCollector
@@ -21,6 +22,7 @@ from .forex import ForexCollector
 @dataclass
 class CountryConditions:
     """Current economic conditions for a country"""
+
     country_code: str
     timestamp: datetime
 
@@ -58,34 +60,34 @@ class CountryDataCollector:
 
     # Stock index tickers for all 20 countries
     STOCK_INDEX_TICKERS = {
-        "USA": "^GSPC",       # S&P 500
-        "CAN": "^GSPTSE",     # S&P/TSX Composite
-        "MEX": "^MXX",        # IPC Mexico
-        "BRA": "^BVSP",       # Bovespa
-        "ARG": "^MERV",       # Merval
-        "GBR": "^FTSE",       # FTSE 100
-        "DEU": "^GDAXI",      # DAX
-        "FRA": "^FCHI",       # CAC 40
-        "SWE": "^OMX",        # OMX Stockholm 30
-        "NOR": "^OSEAX",      # Oslo All Share
-        "CHE": "^SSMI",       # SMI
-        "LIE": "^SSMI",       # Uses Swiss SMI
-        "CHN": "000001.SS",   # Shanghai Composite
-        "JPN": "^N225",       # Nikkei 225
-        "IND": "^BSESN",      # BSE Sensex
-        "IDN": "^JKSE",       # Jakarta Composite
-        "ARE": "^DFMGI",      # Dubai Financial Market
-        "SAU": "^TASI",       # Tadawul All Share
-        "RUS": "IMOEX.ME",    # MOEX Russia
-        "TUR": "XU100.IS",    # BIST 100
+        "USA": "^GSPC",  # S&P 500
+        "CAN": "^GSPTSE",  # S&P/TSX Composite
+        "MEX": "^MXX",  # IPC Mexico
+        "BRA": "^BVSP",  # Bovespa
+        "ARG": "^MERV",  # Merval
+        "GBR": "^FTSE",  # FTSE 100
+        "DEU": "^GDAXI",  # DAX
+        "FRA": "^FCHI",  # CAC 40
+        "SWE": "^OMX",  # OMX Stockholm 30
+        "NOR": "^OSEAX",  # Oslo All Share
+        "CHE": "^SSMI",  # SMI
+        "LIE": "^SSMI",  # Uses Swiss SMI
+        "CHN": "000001.SS",  # Shanghai Composite
+        "JPN": "^N225",  # Nikkei 225
+        "IND": "^BSESN",  # BSE Sensex
+        "IDN": "^JKSE",  # Jakarta Composite
+        "ARE": "^DFMGI",  # Dubai Financial Market
+        "SAU": "^TASI",  # Tadawul All Share
+        "RUS": "IMOEX.ME",  # MOEX Russia
+        "TUR": "XU100.IS",  # BIST 100
     }
 
     # Bond yield tickers (10-year when available)
     BOND_YIELD_TICKERS = {
-        "USA": "^TNX",        # 10-Year Treasury
-        "DEU": None,          # Use ECB rate proxy
-        "GBR": None,          # Use BoE rate proxy
-        "JPN": None,          # Use BoJ rate proxy
+        "USA": "^TNX",  # 10-Year Treasury
+        "DEU": None,  # Use ECB rate proxy
+        "GBR": None,  # Use BoE rate proxy
+        "JPN": None,  # Use BoJ rate proxy
     }
 
     # Country currencies
@@ -121,8 +123,8 @@ class CountryDataCollector:
         """
         self.country_code = country_code
         self.forex_collector = ForexCollector()
-        self._cache: Dict[str, Any] = {}
-        self._cache_time: Optional[datetime] = None
+        self._cache: dict[str, Any] = {}
+        self._cache_time: datetime | None = None
         self._cache_ttl = timedelta(minutes=15)
 
     def _is_cache_valid(self) -> bool:
@@ -137,11 +139,11 @@ class CountryDataCollector:
         return self.COUNTRY_CURRENCIES.get(self.country_code, "USD")
 
     @property
-    def stock_ticker(self) -> Optional[str]:
+    def stock_ticker(self) -> str | None:
         """Get stock index ticker for this country"""
         return self.STOCK_INDEX_TICKERS.get(self.country_code)
 
-    def get_stock_index(self) -> Dict[str, Any]:
+    def get_stock_index(self) -> dict[str, Any]:
         """
         Get stock index data for this country.
 
@@ -163,8 +165,16 @@ class CountryDataCollector:
 
                 # Get 52-week data
                 hist_1y = data.history(period="1y")
-                high_52w = Decimal(str(round(hist_1y["High"].max(), 2))) if not hist_1y.empty else current
-                low_52w = Decimal(str(round(hist_1y["Low"].min(), 2))) if not hist_1y.empty else current
+                high_52w = (
+                    Decimal(str(round(hist_1y["High"].max(), 2)))
+                    if not hist_1y.empty
+                    else current
+                )
+                low_52w = (
+                    Decimal(str(round(hist_1y["Low"].min(), 2)))
+                    if not hist_1y.empty
+                    else current
+                )
 
                 return {
                     "ticker": ticker,
@@ -173,7 +183,9 @@ class CountryDataCollector:
                     "high_52w": high_52w,
                     "low_52w": low_52w,
                     "volume": int(hist["Volume"].iloc[-1]) if "Volume" in hist else 0,
-                    "volatility": float(hist["Close"].std() / hist["Close"].mean() * 100),
+                    "volatility": float(
+                        hist["Close"].std() / hist["Close"].mean() * 100
+                    ),
                 }
 
         except Exception as e:
@@ -181,7 +193,7 @@ class CountryDataCollector:
 
         return self._get_mock_stock_data()
 
-    def _get_mock_stock_data(self) -> Dict[str, Any]:
+    def _get_mock_stock_data(self) -> dict[str, Any]:
         """Return mock stock data for testing"""
         mock_values = {
             "USA": 5000,
@@ -216,7 +228,7 @@ class CountryDataCollector:
             "volatility": 15.0,
         }
 
-    def get_currency_rate(self) -> Dict[str, Any]:
+    def get_currency_rate(self) -> dict[str, Any]:
         """
         Get currency exchange rate vs USD.
 
@@ -256,7 +268,7 @@ class CountryDataCollector:
             "CAN": 0.045,
             "MEX": 0.11,
             "BRA": 0.1075,
-            "ARG": 0.80,   # Very high (inflation)
+            "ARG": 0.80,  # Very high (inflation)
             "GBR": 0.05,
             "DEU": 0.035,
             "FRA": 0.035,
@@ -270,12 +282,12 @@ class CountryDataCollector:
             "IDN": 0.06,
             "ARE": 0.05,
             "SAU": 0.05,
-            "RUS": 0.16,   # High (sanctions, inflation)
-            "TUR": 0.45,   # Very high (Erdogan policy)
+            "RUS": 0.16,  # High (sanctions, inflation)
+            "TUR": 0.45,  # Very high (Erdogan policy)
         }
         return estimated_rates.get(self.country_code, 0.05)
 
-    def get_market_sentiment(self) -> Dict[str, Any]:
+    def get_market_sentiment(self) -> dict[str, Any]:
         """
         Get market sentiment indicators for this country.
 
@@ -294,9 +306,9 @@ class CountryDataCollector:
 
         # Fear level based on volatility and negative momentum
         volatility = stock_data.get("volatility", 15)
-        fear_level = min(1.0, max(0.0,
-            (volatility / 30) + (0.3 if stock_momentum < -5 else 0)
-        ))
+        fear_level = min(
+            1.0, max(0.0, (volatility / 30) + (0.3 if stock_momentum < -5 else 0))
+        )
 
         return {
             "is_bullish": is_bullish,
@@ -334,7 +346,7 @@ class CountryDataCollector:
             fear_level=sentiment["fear_level"],
         )
 
-    def get_all_data(self) -> Dict[str, Any]:
+    def get_all_data(self) -> dict[str, Any]:
         """
         Get all available data for this country.
 
@@ -380,14 +392,29 @@ class MultiCountryCollector:
     """
 
     ALL_COUNTRIES = [
-        "USA", "CAN", "MEX", "BRA", "ARG",
-        "GBR", "DEU", "FRA", "SWE", "NOR", "CHE", "LIE",
-        "CHN", "JPN", "IND", "IDN",
-        "ARE", "SAU",
-        "RUS", "TUR",
+        "USA",
+        "CAN",
+        "MEX",
+        "BRA",
+        "ARG",
+        "GBR",
+        "DEU",
+        "FRA",
+        "SWE",
+        "NOR",
+        "CHE",
+        "LIE",
+        "CHN",
+        "JPN",
+        "IND",
+        "IDN",
+        "ARE",
+        "SAU",
+        "RUS",
+        "TUR",
     ]
 
-    def __init__(self, countries: Optional[List[str]] = None):
+    def __init__(self, countries: list[str] | None = None):
         """
         Initialize multi-country collector.
 
@@ -395,12 +422,12 @@ class MultiCountryCollector:
             countries: List of country codes (default: all 20)
         """
         self.countries = countries or self.ALL_COUNTRIES
-        self._collectors: Dict[str, CountryDataCollector] = {}
+        self._collectors: dict[str, CountryDataCollector] = {}
 
         for country in self.countries:
             self._collectors[country] = CountryDataCollector(country)
 
-    def get_all_conditions(self) -> Dict[str, CountryConditions]:
+    def get_all_conditions(self) -> dict[str, CountryConditions]:
         """
         Get conditions for all countries.
 
@@ -415,7 +442,7 @@ class MultiCountryCollector:
                 print(f"Error getting conditions for {country}: {e}")
         return conditions
 
-    def get_comparison_data(self) -> Dict[str, Dict[str, Any]]:
+    def get_comparison_data(self) -> dict[str, dict[str, Any]]:
         """
         Get comparison data across all countries.
 
@@ -426,24 +453,16 @@ class MultiCountryCollector:
 
         # Sort by various metrics
         by_stock_performance = sorted(
-            conditions.items(),
-            key=lambda x: x[1].stock_index_change_pct,
-            reverse=True
+            conditions.items(), key=lambda x: x[1].stock_index_change_pct, reverse=True
         )
         by_currency_strength = sorted(
-            conditions.items(),
-            key=lambda x: x[1].fx_change_30d_pct,
-            reverse=True
+            conditions.items(), key=lambda x: x[1].fx_change_30d_pct, reverse=True
         )
         by_interest_rate = sorted(
-            conditions.items(),
-            key=lambda x: x[1].implied_rate,
-            reverse=True
+            conditions.items(), key=lambda x: x[1].implied_rate, reverse=True
         )
         by_fear_level = sorted(
-            conditions.items(),
-            key=lambda x: x[1].fear_level,
-            reverse=True
+            conditions.items(), key=lambda x: x[1].fear_level, reverse=True
         )
 
         return {
@@ -456,26 +475,22 @@ class MultiCountryCollector:
                 for c, cond in by_currency_strength
             ],
             "interest_rate_ranking": [
-                (c, f"{cond.implied_rate:.1%}")
-                for c, cond in by_interest_rate
+                (c, f"{cond.implied_rate:.1%}") for c, cond in by_interest_rate
             ],
             "fear_ranking": [
-                (c, f"{cond.fear_level:.2f}")
-                for c, cond in by_fear_level
+                (c, f"{cond.fear_level:.2f}") for c, cond in by_fear_level
             ],
             "bullish_countries": [
-                c for c, cond in conditions.items()
-                if cond.is_bullish
+                c for c, cond in conditions.items() if cond.is_bullish
             ],
             "bearish_countries": [
-                c for c, cond in conditions.items()
-                if not cond.is_bullish
+                c for c, cond in conditions.items() if not cond.is_bullish
             ],
         }
 
 
 # Simple interface
-def get_country_data(country_code: str) -> Dict[str, Any]:
+def get_country_data(country_code: str) -> dict[str, Any]:
     """Get all data for a country"""
     collector = CountryDataCollector(country_code)
     return collector.get_all_data()
@@ -488,8 +503,8 @@ def get_country_conditions(country_code: str) -> CountryConditions:
 
 
 def get_multi_country_comparison(
-    countries: Optional[List[str]] = None
-) -> Dict[str, Dict[str, Any]]:
+    countries: list[str] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Get comparison across multiple countries"""
     collector = MultiCountryCollector(countries)
     return collector.get_comparison_data()

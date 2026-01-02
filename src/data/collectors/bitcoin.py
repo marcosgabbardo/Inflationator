@@ -11,15 +11,20 @@ Austrian Theory Relevance:
 
 import asyncio
 import time
-from decimal import Decimal
-from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
 import httpx
+
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # Global shared cache to avoid rate limiting across instances
-_GLOBAL_BTC_CACHE: Dict[str, Any] = {}
-_GLOBAL_BTC_CACHE_TIME: Optional[datetime] = None
+_GLOBAL_BTC_CACHE: dict[str, Any] = {}
+_GLOBAL_BTC_CACHE_TIME: datetime | None = None
 _GLOBAL_LAST_API_CALL: float = 0.0
 _API_CALL_DELAY: float = 2.0  # 2 seconds between API calls
 
@@ -44,11 +49,11 @@ class BitcoinCollector:
 
     BASE_URL = "https://api.coingecko.com/api/v3"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key
         self._cache_ttl = timedelta(minutes=10)  # Cache for 10 minutes
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get request headers"""
         headers = {
             "Accept": "application/json",
@@ -64,7 +69,7 @@ class BitcoinCollector:
             return False
         return datetime.now() - _GLOBAL_BTC_CACHE_TIME < self._cache_ttl
 
-    async def get_current_price(self) -> Dict[str, Decimal]:
+    async def get_current_price(self) -> dict[str, Decimal]:
         """
         Get current Bitcoin price in multiple currencies.
 
@@ -111,15 +116,15 @@ class BitcoinCollector:
                 _GLOBAL_BTC_CACHE_TIME = datetime.now()
                 return prices
 
-            except Exception as e:
-                print(f"Error fetching Bitcoin price: {e}")
+            except httpx.HTTPError as e:
+                logger.error("Error fetching Bitcoin price: %s", e)
                 # Return cached data if available
                 if "price" in _GLOBAL_BTC_CACHE:
                     return _GLOBAL_BTC_CACHE["price"]
                 # Return mock data as fallback
                 return self._get_mock_price()
 
-    def _get_mock_price(self) -> Dict[str, Decimal]:
+    def _get_mock_price(self) -> dict[str, Decimal]:
         """Return mock price data for testing"""
         return {
             "usd": Decimal("50000"),
@@ -131,7 +136,7 @@ class BitcoinCollector:
             "market_cap_usd": Decimal("1000000000000"),
         }
 
-    async def get_market_data(self) -> Dict[str, Any]:
+    async def get_market_data(self) -> dict[str, Any]:
         """
         Get comprehensive Bitcoin market data.
 
@@ -170,31 +175,43 @@ class BitcoinCollector:
                 market_data = data.get("market_data", {})
 
                 result = {
-                    "price_usd": Decimal(str(market_data.get("current_price", {}).get("usd", 0))),
-                    "market_cap_usd": Decimal(str(market_data.get("market_cap", {}).get("usd", 0))),
-                    "volume_24h_usd": Decimal(str(market_data.get("total_volume", {}).get("usd", 0))),
-                    "circulating_supply": Decimal(str(market_data.get("circulating_supply", 0))),
+                    "price_usd": Decimal(
+                        str(market_data.get("current_price", {}).get("usd", 0))
+                    ),
+                    "market_cap_usd": Decimal(
+                        str(market_data.get("market_cap", {}).get("usd", 0))
+                    ),
+                    "volume_24h_usd": Decimal(
+                        str(market_data.get("total_volume", {}).get("usd", 0))
+                    ),
+                    "circulating_supply": Decimal(
+                        str(market_data.get("circulating_supply", 0))
+                    ),
                     "total_supply": Decimal(str(market_data.get("total_supply", 0))),
                     "max_supply": Decimal("21000000"),  # Fixed
                     "ath_usd": Decimal(str(market_data.get("ath", {}).get("usd", 0))),
                     "ath_date": market_data.get("ath_date", {}).get("usd"),
-                    "price_change_24h": market_data.get("price_change_percentage_24h", 0),
+                    "price_change_24h": market_data.get(
+                        "price_change_percentage_24h", 0
+                    ),
                     "price_change_7d": market_data.get("price_change_percentage_7d", 0),
-                    "price_change_30d": market_data.get("price_change_percentage_30d", 0),
+                    "price_change_30d": market_data.get(
+                        "price_change_percentage_30d", 0
+                    ),
                 }
 
                 _GLOBAL_BTC_CACHE["market_data"] = result
                 _GLOBAL_BTC_CACHE_TIME = datetime.now()
                 return result
 
-            except Exception as e:
-                print(f"Error fetching Bitcoin market data: {e}")
+            except httpx.HTTPError as e:
+                logger.error("Error fetching Bitcoin market data: %s", e)
                 # Return cached data if available
                 if "market_data" in _GLOBAL_BTC_CACHE:
                     return _GLOBAL_BTC_CACHE["market_data"]
                 return self._get_mock_market_data()
 
-    def _get_mock_market_data(self) -> Dict[str, Any]:
+    def _get_mock_market_data(self) -> dict[str, Any]:
         """Return mock market data for testing"""
         return {
             "price_usd": Decimal("50000"),
@@ -211,10 +228,8 @@ class BitcoinCollector:
         }
 
     async def get_historical_prices(
-        self,
-        days: int = 30,
-        currency: str = "usd"
-    ) -> List[Dict[str, Any]]:
+        self, days: int = 30, currency: str = "usd"
+    ) -> list[dict[str, Any]]:
         """
         Get historical price data.
 
@@ -248,14 +263,12 @@ class BitcoinCollector:
                     for p in prices
                 ]
 
-            except Exception as e:
-                print(f"Error fetching historical prices: {e}")
+            except httpx.HTTPError as e:
+                logger.error("Error fetching historical prices: %s", e)
                 return []
 
     def calculate_dollar_debasement(
-        self,
-        btc_price_usd: Decimal,
-        baseline_price: Decimal = Decimal("1")
+        self, btc_price_usd: Decimal, baseline_price: Decimal = Decimal("1")
     ) -> float:
         """
         Calculate dollar debasement using Bitcoin as reference.
@@ -279,13 +292,13 @@ class BitcoinCollector:
 
 
 # Synchronous wrapper for non-async code
-def get_bitcoin_price() -> Dict[str, Decimal]:
+def get_bitcoin_price() -> dict[str, Decimal]:
     """Synchronous wrapper to get Bitcoin price"""
     collector = BitcoinCollector()
     return asyncio.run(collector.get_current_price())
 
 
-def get_bitcoin_market_data() -> Dict[str, Any]:
+def get_bitcoin_market_data() -> dict[str, Any]:
     """Synchronous wrapper to get Bitcoin market data"""
     collector = BitcoinCollector()
     return asyncio.run(collector.get_market_data())

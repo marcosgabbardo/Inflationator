@@ -5,16 +5,26 @@ All database tables for the Inflationator simulation.
 Based on Austrian Economics principles.
 """
 
+import uuid
+from enum import Enum as PyEnum
+
 from sqlalchemy import (
-    Column, String, Float, Integer, BigInteger, Boolean,
-    DateTime, Text, Enum, ForeignKey, JSON, Index,
-    DECIMAL
+    DECIMAL,
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
-from datetime import datetime
-from enum import Enum as PyEnum
-import uuid
 
 Base = declarative_base()
 
@@ -27,6 +37,7 @@ def generate_uuid() -> str:
 # ============================================
 # ENUMS
 # ============================================
+
 
 class AgentType(str, PyEnum):
     PERSON = "person"
@@ -64,8 +75,10 @@ class MarketType(str, PyEnum):
 # AGENTS
 # ============================================
 
+
 class Agent(Base):
     """Base agent table for all economic actors"""
+
     __tablename__ = "agents"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -75,29 +88,28 @@ class Agent(Base):
     # Wealth & Holdings
     wealth = Column(DECIMAL(20, 8), default=0)  # In monetary units
     bitcoin = Column(DECIMAL(20, 8), default=0)  # BTC holdings
-    gold = Column(DECIMAL(20, 8), default=0)    # Gold oz
+    gold = Column(DECIMAL(20, 8), default=0)  # Gold oz
 
     # Austrian Economics Parameters
     time_preference = Column(Float, default=0.5)  # 0=low (saves), 1=high (consumes)
-    risk_tolerance = Column(Float, default=0.5)   # 0=conservative, 1=aggressive
+    risk_tolerance = Column(Float, default=0.5)  # 0=conservative, 1=aggressive
 
     # State
     is_active = Column(Boolean, default=True)
-    knowledge = Column(JSON, default=dict)      # Available information
-    expectations = Column(JSON, default=dict)   # Future expectations
+    knowledge = Column(JSON, default=dict)  # Available information
+    expectations = Column(JSON, default=dict)  # Future expectations
 
     # Timestamps
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Indexes for performance
-    __table_args__ = (
-        Index('idx_agent_country_type', 'country', 'type'),
-    )
+    __table_args__ = (Index("idx_agent_country_type", "country", "type"),)
 
 
 class Person(Base):
     """Person agent - individual economic actor"""
+
     __tablename__ = "persons"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -111,7 +123,7 @@ class Person(Base):
 
     # Consumption
     consumption_rate = Column(Float, default=0.7)  # % of income consumed
-    savings_rate = Column(Float, default=0.3)      # % saved
+    savings_rate = Column(Float, default=0.3)  # % saved
 
     # Demographics (affects behavior)
     age_group = Column(String(20), default="adult")  # young, adult, senior
@@ -122,6 +134,7 @@ class Person(Base):
 
 class Company(Base):
     """Company agent - business entity"""
+
     __tablename__ = "companies"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -149,11 +162,14 @@ class Company(Base):
 
     # Relationships
     agent = relationship("Agent", backref="company_data")
-    employees = relationship("Person", backref="employer", foreign_keys=[Person.employer_id])
+    employees = relationship(
+        "Person", backref="employer", foreign_keys=[Person.employer_id]
+    )
 
 
 class Bank(Base):
     """Private bank agent"""
+
     __tablename__ = "banks"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -180,6 +196,7 @@ class Bank(Base):
 
 class CentralBank(Base):
     """Central Bank - THE VILLAIN (monetary distortions)"""
+
     __tablename__ = "central_banks"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -212,6 +229,7 @@ class CentralBank(Base):
 
 class Government(Base):
     """Government - THE VILLAIN (political distortions)"""
+
     __tablename__ = "governments"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -238,12 +256,12 @@ class Government(Base):
     deficit = Column(DECIMAL(20, 8), default=0)
 
     # International Relations
-    at_war_with = Column(JSON, default=list)     # List of country codes
-    sanctions_on = Column(JSON, default=list)    # List of country codes
-    allies = Column(JSON, default=list)          # List of country codes
+    at_war_with = Column(JSON, default=list)  # List of country codes
+    sanctions_on = Column(JSON, default=list)  # List of country codes
+    allies = Column(JSON, default=list)  # List of country codes
 
     # Policies & Metrics
-    policies = Column(JSON, default=dict)        # Active policies
+    policies = Column(JSON, default=dict)  # Active policies
     damage_metrics = Column(JSON, default=dict)  # Harm caused
 
     # Freedom Index (inverse of intervention - higher=better)
@@ -260,8 +278,10 @@ class Government(Base):
 # MARKETS
 # ============================================
 
+
 class Market(Base):
     """Market for exchange of goods/services"""
+
     __tablename__ = "markets"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -288,6 +308,7 @@ class Market(Base):
 
 class Transaction(Base):
     """Record of economic transactions"""
+
     __tablename__ = "transactions"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -307,9 +328,9 @@ class Transaction(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_transaction_tick', 'simulation_tick'),
-        Index('idx_transaction_buyer', 'buyer_id'),
-        Index('idx_transaction_seller', 'seller_id'),
+        Index("idx_transaction_tick", "simulation_tick"),
+        Index("idx_transaction_buyer", "buyer_id"),
+        Index("idx_transaction_seller", "seller_id"),
     )
 
 
@@ -317,8 +338,10 @@ class Transaction(Base):
 # CONFLICTS & GEOPOLITICS
 # ============================================
 
+
 class Conflict(Base):
     """International conflicts and their economic impact"""
+
     __tablename__ = "conflicts"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -344,8 +367,10 @@ class Conflict(Base):
 # SCENARIOS & SIMULATION
 # ============================================
 
+
 class Scenario(Base):
     """What-if scenarios for simulation"""
+
     __tablename__ = "scenarios"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -367,6 +392,7 @@ class Scenario(Base):
 
 class WorldSnapshot(Base):
     """Snapshot of world state at a simulation tick"""
+
     __tablename__ = "world_snapshots"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -398,7 +424,7 @@ class WorldSnapshot(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_snapshot_scenario_tick', 'scenario_id', 'simulation_tick'),
+        Index("idx_snapshot_scenario_tick", "scenario_id", "simulation_tick"),
     )
 
 
@@ -406,8 +432,10 @@ class WorldSnapshot(Base):
 # EXTERNAL DATA
 # ============================================
 
+
 class ExternalData(Base):
     """Data from external sources (APIs)"""
+
     __tablename__ = "external_data"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -422,6 +450,4 @@ class ExternalData(Base):
     created_at = Column(DateTime, default=func.now())
 
     # Indexes
-    __table_args__ = (
-        Index('idx_external_source_type', 'source', 'data_type'),
-    )
+    __table_args__ = (Index("idx_external_source_type", "source", "data_type"),)

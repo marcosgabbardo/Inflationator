@@ -9,25 +9,27 @@ Makes decisions about:
 - Pricing (based on costs and demand)
 """
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Dict, Any, List, Optional
 import random
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
 
-from .base import Agent, AgentType, AgentState
+from .base import Agent, AgentState, AgentType
 
 
 class ProductionType:
     """Order of goods in Hayekian structure"""
-    CONSUMER_GOODS = "consumer_goods"      # First order (direct consumption)
-    CAPITAL_GOODS_1 = "capital_goods_1"    # Second order
-    CAPITAL_GOODS_2 = "capital_goods_2"    # Third order (more removed)
-    RAW_MATERIALS = "raw_materials"        # Higher order
+
+    CONSUMER_GOODS = "consumer_goods"  # First order (direct consumption)
+    CAPITAL_GOODS_1 = "capital_goods_1"  # Second order
+    CAPITAL_GOODS_2 = "capital_goods_2"  # Third order (more removed)
+    RAW_MATERIALS = "raw_materials"  # Higher order
 
 
 @dataclass
 class CompanyState(AgentState):
     """Extended state for company agents"""
+
     capital_stock: Decimal = Decimal("0")
     revenue: Decimal = Decimal("0")
     costs: Decimal = Decimal("0")
@@ -50,7 +52,7 @@ class Company(Agent):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         time_preference: float = 0.3,  # Companies usually longer-term
         risk_tolerance: float = 0.5,
@@ -58,7 +60,7 @@ class Company(Agent):
         sector: str = "manufacturing",
         production_type: str = ProductionType.CONSUMER_GOODS,
         order_of_goods: int = 1,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(
             agent_id=agent_id,
@@ -81,7 +83,7 @@ class Company(Agent):
         )
 
         # Employment
-        self.employees: List[str] = []  # List of person IDs
+        self.employees: list[str] = []  # List of person IDs
         self.wage_rate: Decimal = Decimal("1000")
 
         # Financial
@@ -101,9 +103,7 @@ class Company(Agent):
     # ===========================================
 
     def calculate_optimal_production(
-        self,
-        price: Decimal,
-        input_costs: Dict[str, Decimal]
+        self, price: Decimal, input_costs: dict[str, Decimal]
     ) -> Decimal:
         """
         Calculate optimal production quantity.
@@ -119,7 +119,9 @@ class Company(Agent):
 
         if price > 0:
             # Marginal cost approximation
-            marginal_cost = total_variable_cost / max(Decimal("1"), self.state.production_capacity)
+            marginal_cost = total_variable_cost / max(
+                Decimal("1"), self.state.production_capacity
+            )
 
             # Produce up to capacity if profitable
             if price > marginal_cost:
@@ -158,7 +160,9 @@ class Company(Agent):
         - Lower interest rates cause over-hiring (malinvestment)
         """
         # Marginal productivity of labor (simplified)
-        marginal_product = self.capital_stock * Decimal("0.01") / max(1, self.num_employees + 1)
+        marginal_product = (
+            self.capital_stock * Decimal("0.01") / max(1, self.num_employees + 1)
+        )
 
         # Demand more labor if marginal product > wage
         if marginal_product > market_wage:
@@ -200,7 +204,7 @@ class Company(Agent):
         project_cost: Decimal,
         expected_return: float,
         duration: int,
-        interest_rate: float
+        interest_rate: float,
     ) -> bool:
         """
         Evaluate whether to invest in a project.
@@ -241,7 +245,9 @@ class Company(Agent):
 
     def pay_interest(self) -> Decimal:
         """Pay interest on debt"""
-        interest_payment = self.state.debt * Decimal(str(self.interest_rate / 52))  # Weekly
+        interest_payment = self.state.debt * Decimal(
+            str(self.interest_rate / 52)
+        )  # Weekly
         if interest_payment <= self.wealth:
             self.wealth -= interest_payment
             self.state.costs += interest_payment
@@ -253,10 +259,7 @@ class Company(Agent):
     # ===========================================
 
     def set_price(
-        self,
-        production_cost: Decimal,
-        market_price: Decimal,
-        demand_level: float
+        self, production_cost: Decimal, market_price: Decimal, demand_level: float
     ) -> Decimal:
         """
         Set price for output.
@@ -290,7 +293,7 @@ class Company(Agent):
     # MAIN STEP FUNCTION
     # ===========================================
 
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute one simulation step"""
         actions = []
 
@@ -316,10 +319,10 @@ class Company(Agent):
                 actions.append({"type": "tax_paid", "amount": str(tax)})
 
         # 4. Production decision
-        price = Decimal(str(world_state.get("prices", {}).get(self.production_type, 100)))
-        input_costs = {
-            "materials": Decimal(str(world_state.get("material_costs", 50)))
-        }
+        price = Decimal(
+            str(world_state.get("prices", {}).get(self.production_type, 100))
+        )
+        input_costs = {"materials": Decimal(str(world_state.get("material_costs", 50)))}
         optimal_quantity = self.calculate_optimal_production(price, input_costs)
         produced = self.produce(optimal_quantity)
         if produced > 0:
@@ -332,20 +335,15 @@ class Company(Agent):
             self.wealth += revenue
             sold = self.state.inventory
             self.state.inventory = Decimal("0")
-            actions.append({
-                "type": "sales",
-                "quantity": str(sold),
-                "revenue": str(revenue)
-            })
+            actions.append(
+                {"type": "sales", "quantity": str(sold), "revenue": str(revenue)}
+            )
 
         # 6. Hiring/firing decisions
         market_wage = Decimal(str(world_state.get("market_wage", 1000)))
         labor_demand = self.calculate_labor_demand(market_wage)
         if labor_demand != 0:
-            actions.append({
-                "type": "labor_adjustment",
-                "demand": labor_demand
-            })
+            actions.append({"type": "labor_adjustment", "demand": labor_demand})
 
         # 7. Investment decisions (if interest rate is attractive)
         if self.wealth > self.state.capital_stock * Decimal("0.2"):
@@ -354,13 +352,10 @@ class Company(Agent):
                 project_cost,
                 expected_return=0.15,
                 duration=5,
-                interest_rate=interest_rate
+                interest_rate=interest_rate,
             ):
                 self.invest_in_capital(project_cost)
-                actions.append({
-                    "type": "investment",
-                    "amount": str(project_cost)
-                })
+                actions.append({"type": "investment", "amount": str(project_cost)})
 
         # Reset period costs
         self.state.costs = Decimal("0")
@@ -386,23 +381,31 @@ class Company(Agent):
 
     @classmethod
     def create_random(
-        cls,
-        country: str = "USA",
-        sectors: Optional[List[str]] = None
+        cls, country: str = "USA", sectors: list[str] | None = None
     ) -> "Company":
         """Create a company with random characteristics"""
         if sectors is None:
-            sectors = ["manufacturing", "services", "agriculture", "technology", "finance"]
+            sectors = [
+                "manufacturing",
+                "services",
+                "agriculture",
+                "technology",
+                "finance",
+            ]
 
         sector = random.choice(sectors)
 
         # Production type based on sector
         if sector in ["manufacturing", "agriculture"]:
-            production_type = random.choice([
-                ProductionType.CONSUMER_GOODS,
-                ProductionType.CAPITAL_GOODS_1,
-            ])
-            order_of_goods = 1 if production_type == ProductionType.CONSUMER_GOODS else 2
+            production_type = random.choice(
+                [
+                    ProductionType.CONSUMER_GOODS,
+                    ProductionType.CAPITAL_GOODS_1,
+                ]
+            )
+            order_of_goods = (
+                1 if production_type == ProductionType.CONSUMER_GOODS else 2
+            )
         elif sector == "technology":
             production_type = ProductionType.CAPITAL_GOODS_2
             order_of_goods = 3

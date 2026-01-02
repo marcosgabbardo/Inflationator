@@ -9,17 +9,18 @@ Based on Austrian Economics principles:
 - Spontaneous order
 """
 
+import random
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
 from decimal import Decimal
 from enum import Enum
-import uuid
-import random
+from typing import Any
 
 
 class AgentType(str, Enum):
     """Types of agents in the simulation"""
+
     PERSON = "person"
     COMPANY = "company"
     BANK = "bank"
@@ -30,12 +31,13 @@ class AgentType(str, Enum):
 @dataclass
 class AgentState:
     """Current state of an agent"""
+
     wealth: Decimal = Decimal("0")
     bitcoin: Decimal = Decimal("0")
     gold: Decimal = Decimal("0")
     is_active: bool = True
-    knowledge: Dict[str, Any] = field(default_factory=dict)
-    expectations: Dict[str, float] = field(default_factory=dict)
+    knowledge: dict[str, Any] = field(default_factory=dict)
+    expectations: dict[str, float] = field(default_factory=dict)
 
 
 class Agent(ABC):
@@ -52,7 +54,7 @@ class Agent(ABC):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         time_preference: float = 0.5,
         risk_tolerance: float = 0.5,
@@ -70,11 +72,13 @@ class Agent(ABC):
         self.state = AgentState(wealth=initial_wealth)
 
         # History for learning
-        self._decision_history: List[Dict] = []
-        self._error_history: List[float] = []  # For adaptive expectations
+        self._decision_history: list[dict] = []
+        self._error_history: list[float] = []  # For adaptive expectations
 
     @staticmethod
-    def _validate_range(value: float, min_val: float = 0.0, max_val: float = 1.0) -> float:
+    def _validate_range(
+        value: float, min_val: float = 0.0, max_val: float = 1.0
+    ) -> float:
         """Ensure value is within valid range"""
         return max(min_val, min(max_val, value))
 
@@ -111,10 +115,7 @@ class Agent(ABC):
         return self._validate_range(base_savings + noise)
 
     def evaluate_investment(
-        self,
-        expected_return: float,
-        time_horizon: int,
-        risk_level: float
+        self, expected_return: float, time_horizon: int, risk_level: float
     ) -> bool:
         """
         Decide whether to make an investment.
@@ -128,13 +129,17 @@ class Agent(ABC):
         discount_factor = (1 - self.time_preference) ** time_horizon
 
         # Adjust for risk
-        risk_adjusted_return = expected_return * (1 - risk_level * (1 - self.risk_tolerance))
+        risk_adjusted_return = expected_return * (
+            1 - risk_level * (1 - self.risk_tolerance)
+        )
 
         # Present value of investment
         present_value = risk_adjusted_return * discount_factor
 
         # Invest if present value exceeds threshold
-        threshold = self.time_preference * 0.5  # Higher time preference = higher threshold
+        threshold = (
+            self.time_preference * 0.5
+        )  # Higher time preference = higher threshold
         return present_value > threshold
 
     def update_expectations(self, actual_value: float, expected_value: float):
@@ -175,7 +180,7 @@ class Agent(ABC):
     # ===========================================
 
     @abstractmethod
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Execute one simulation step.
 
@@ -201,7 +206,7 @@ class Agent(ABC):
     # UTILITY METHODS
     # ===========================================
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize agent to dictionary"""
         return {
             "id": self.id,

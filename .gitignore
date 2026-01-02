@@ -64,3 +64,17 @@ data/processed/
 # Generated reports (output directory, not source code)
 /reports/
 /test_reports/
+/test_output/
+
+# Type checking
+.mypy_cache/
+
+# Ruff cache
+.ruff_cache/
+
+# UV cache
+.uv/
+
+# Python cache
+*.pyc
+*.pyo
