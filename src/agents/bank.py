@@ -12,17 +12,18 @@ Austrian Theory: Banks create credit through fractional reserves,
 which can cause malinvestment when done excessively.
 """
 
+import random
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Any, List, Optional
-import random
+from typing import Any
 
-from .base import Agent, AgentType, AgentState
+from .base import Agent, AgentState, AgentType
 
 
 @dataclass
 class BankState(AgentState):
     """Extended state for bank agents"""
+
     reserves: Decimal = Decimal("0")
     total_deposits: Decimal = Decimal("0")
     total_loans: Decimal = Decimal("0")
@@ -42,11 +43,11 @@ class Bank(Agent):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         initial_capital: Decimal = Decimal("1000000"),
         reserve_ratio: float = 0.10,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(
             agent_id=agent_id,
@@ -73,8 +74,8 @@ class Bank(Agent):
         )
 
         # Loan tracking
-        self.loans: Dict[str, Dict] = {}  # borrower_id -> loan details
-        self.deposits: Dict[str, Decimal] = {}  # depositor_id -> amount
+        self.loans: dict[str, dict] = {}  # borrower_id -> loan details
+        self.deposits: dict[str, Decimal] = {}  # depositor_id -> amount
 
     @property
     def reserves(self) -> Decimal:
@@ -155,7 +156,7 @@ class Bank(Agent):
         borrower_id: str,
         amount: Decimal,
         collateral: Decimal,
-        borrower_creditworthiness: float
+        borrower_creditworthiness: float,
     ) -> bool:
         """
         Evaluate whether to approve a loan.
@@ -192,7 +193,7 @@ class Bank(Agent):
         borrower_id: str,
         amount: Decimal,
         term_months: int,
-        collateral: Decimal = Decimal("0")
+        collateral: Decimal = Decimal("0"),
     ) -> bool:
         """
         Create a loan.
@@ -223,7 +224,7 @@ class Bank(Agent):
 
         return True
 
-    def collect_loan_payment(self, borrower_id: str) -> Optional[Decimal]:
+    def collect_loan_payment(self, borrower_id: str) -> Decimal | None:
         """Collect weekly loan payment"""
         if borrower_id not in self.loans:
             return None
@@ -288,7 +289,7 @@ class Bank(Agent):
     # INTEREST RATE DECISIONS
     # ===========================================
 
-    def adjust_rates(self, central_bank_rate: float, market_conditions: Dict):
+    def adjust_rates(self, central_bank_rate: float, market_conditions: dict):
         """
         Adjust deposit and lending rates.
 
@@ -318,44 +319,49 @@ class Bank(Agent):
     # MAIN STEP FUNCTION
     # ===========================================
 
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute one simulation step"""
         actions = []
 
         # 1. Adjust interest rates based on central bank
         cb_rate = world_state.get("policy_rate", 0.05)
         self.adjust_rates(cb_rate, world_state)
-        actions.append({
-            "type": "rate_adjustment",
-            "deposit_rate": self.deposit_rate,
-            "lending_rate": self.lending_rate
-        })
+        actions.append(
+            {
+                "type": "rate_adjustment",
+                "deposit_rate": self.deposit_rate,
+                "lending_rate": self.lending_rate,
+            }
+        )
 
         # 2. Pay deposit interest
         interest_paid = self.pay_deposit_interest()
         if interest_paid > 0:
-            actions.append({
-                "type": "deposit_interest_paid",
-                "amount": str(interest_paid)
-            })
+            actions.append(
+                {"type": "deposit_interest_paid", "amount": str(interest_paid)}
+            )
 
         # 3. Collect loan payments
         for borrower_id in list(self.loans.keys()):
             payment_due = self.collect_loan_payment(borrower_id)
             if payment_due:
-                actions.append({
-                    "type": "loan_payment_due",
-                    "borrower": borrower_id,
-                    "amount": str(payment_due)
-                })
+                actions.append(
+                    {
+                        "type": "loan_payment_due",
+                        "borrower": borrower_id,
+                        "amount": str(payment_due),
+                    }
+                )
 
         # 4. Report credit creation (Austrian focus)
-        actions.append({
-            "type": "credit_status",
-            "total_credit_created": str(self.state.credit_created),
-            "credit_multiplier": self.credit_multiplier,
-            "loanable_funds": str(self.loanable_funds)
-        })
+        actions.append(
+            {
+                "type": "credit_status",
+                "total_credit_created": str(self.state.credit_created),
+                "credit_multiplier": self.credit_multiplier,
+                "loanable_funds": str(self.loanable_funds),
+            }
+        )
 
         return actions
 

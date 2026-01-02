@@ -1,0 +1,218 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inflationator"
+version = "0.1.0"
+description = "Agent-based economic simulator based on Austrian Economics"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Inflationator Team" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["economics", "simulation", "austrian-economics", "agent-based-modeling"]
+
+dependencies = [
+    # Core
+    "mesa>=2.1.0",
+    "sqlalchemy>=2.0.0",
+    "pymysql>=1.1.0",
+    "cryptography>=41.0.0",
+
+    # Data Processing (polars instead of pandas)
+    "polars>=0.20.0",
+    "numpy>=1.24.0",
+
+    # JSON (orjson for performance)
+    "orjson>=3.9.0",
+
+    # APIs & HTTP
+    "httpx>=0.25.0",
+    "aiohttp>=3.9.0",
+
+    # Data Sources
+    "yfinance>=0.2.30",
+    "pycoingecko>=3.1.0",
+
+    # CLI
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+
+    # ML (lightweight)
+    "scikit-learn>=1.3.0",
+    "prophet>=1.1.0",
+
+    # Visualization
+    "plotly>=5.18.0",
+    "matplotlib>=3.8.0",
+
+    # PDF Reports
+    "reportlab>=4.0.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "uuid6>=2023.5.2",
+
+    # Progress bars
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+
+    # Linting and formatting (ruff replaces black, isort, flake8)
+    "ruff>=0.1.0",
+
+    # Type checking
+    "mypy>=1.7.0",
+    "types-requests>=2.31.0",
+
+    # Jupyter support (optional, not in main deps)
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
+]
+
+notebook = [
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
+    "jupyter>=1.0.0",
+]
+
+[project.scripts]
+inflationator = "cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/marcosgabbardo/Inflationator"
+Repository = "https://github.com/marcosgabbardo/Inflationator"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "ARG001", # unused function argument
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "silent"
+ignore_missing_imports = true
+show_error_codes = true
+exclude = [
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "tests",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "mesa.*",
+    "yfinance.*",
+    "pycoingecko.*",
+    "plotly.*",
+    "reportlab.*",
+    "prophet.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

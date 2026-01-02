@@ -16,24 +16,25 @@ Austrian Theory (Mises, Hayek, Rothbard):
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Any, List, Optional
 from enum import Enum
-import random
+from typing import Any
 
-from .base import Agent, AgentType, AgentState
+from .base import Agent, AgentState, AgentType
 
 
 class MonetaryPolicy(str, Enum):
     """Current monetary policy stance"""
-    TIGHT = "tight"           # QT - reducing money supply
-    NEUTRAL = "neutral"       # Stable
-    EASY = "easy"             # QE - expanding money supply
-    EMERGENCY = "emergency"   # Crisis mode - massive QE
+
+    TIGHT = "tight"  # QT - reducing money supply
+    NEUTRAL = "neutral"  # Stable
+    EASY = "easy"  # QE - expanding money supply
+    EMERGENCY = "emergency"  # Crisis mode - massive QE
 
 
 @dataclass
 class CentralBankState(AgentState):
     """State for central bank villain"""
+
     base_money: Decimal = Decimal("0")
     money_printed: Decimal = Decimal("0")
     money_destroyed: Decimal = Decimal("0")  # QT
@@ -70,7 +71,7 @@ class CentralBank(Agent):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         name: str = "Federal Reserve",
         initial_base_money: Decimal = Decimal("1000000000000"),  # $1 trillion
@@ -132,9 +133,7 @@ class CentralBank(Agent):
     def balance_sheet_size(self) -> Decimal:
         """Total assets on balance sheet"""
         return (
-            self.treasuries_held +
-            self.mortgage_backed_securities +
-            self.toxic_assets
+            self.treasuries_held + self.mortgage_backed_securities + self.toxic_assets
         )
 
     @property
@@ -146,9 +145,9 @@ class CentralBank(Agent):
     def total_damage_caused(self) -> Decimal:
         """Total economic damage caused by interventions"""
         return (
-            self.state.inflation_caused +
-            self.state.malinvestment_induced +
-            self.state.bailouts_given
+            self.state.inflation_caused
+            + self.state.malinvestment_induced
+            + self.state.bailouts_given
         )
 
     # ===========================================
@@ -209,9 +208,7 @@ class CentralBank(Agent):
         return amount
 
     def quantitative_easing(
-        self,
-        amount: Decimal,
-        asset_type: str = "treasuries"
+        self, amount: Decimal, asset_type: str = "treasuries"
     ) -> Decimal:
         """
         Buy assets with printed money - QE
@@ -250,9 +247,7 @@ class CentralBank(Agent):
         return printed
 
     def quantitative_tightening(
-        self,
-        amount: Decimal,
-        asset_type: str = "treasuries"
+        self, amount: Decimal, asset_type: str = "treasuries"
     ) -> Decimal:
         """
         Sell assets and destroy money - QT (Quantitative Tightening)
@@ -341,7 +336,7 @@ class CentralBank(Agent):
     # DAMAGE METRICS (Austrian perspective)
     # ===========================================
 
-    def calculate_cantillon_effect(self) -> Dict[str, Decimal]:
+    def calculate_cantillon_effect(self) -> dict[str, Decimal]:
         """
         Calculate wealth transfer from money printing.
 
@@ -361,7 +356,7 @@ class CentralBank(Agent):
             "harmed_fixed_income": total_printed * Decimal("0.4"),
         }
 
-    def calculate_business_cycle_damage(self) -> Dict[str, Any]:
+    def calculate_business_cycle_damage(self) -> dict[str, Any]:
         """
         Calculate damage from artificial credit expansion.
 
@@ -386,7 +381,7 @@ class CentralBank(Agent):
             "recovery_time_weeks": int(float(malinvestment) / 1e9 * 52),
         }
 
-    def get_damage_report(self) -> Dict[str, Any]:
+    def get_damage_report(self) -> dict[str, Any]:
         """Get comprehensive damage report"""
         return {
             "total_money_printed": str(self.state.money_printed),
@@ -406,7 +401,7 @@ class CentralBank(Agent):
     # MAIN STEP FUNCTION - INFLATION TARGETING
     # ===========================================
 
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Execute one simulation step with INFLATION TARGETING.
 
@@ -476,11 +471,13 @@ class CentralBank(Agent):
             if self.intervention_level > 0.2:
                 baseline_expansion = Decimal(str(self.intervention_level * 1e9))
                 self.print_money(baseline_expansion)
-                actions.append({
-                    "type": "baseline_expansion",
-                    "amount": str(baseline_expansion),
-                    "note": "Even 'neutral' policy is expansionary"
-                })
+                actions.append(
+                    {
+                        "type": "baseline_expansion",
+                        "amount": str(baseline_expansion),
+                        "note": "Even 'neutral' policy is expansionary",
+                    }
+                )
 
         # ===========================================
         # BAILOUTS (always available if needed)
@@ -490,35 +487,37 @@ class CentralBank(Agent):
             for bank_id in failing_banks[:3]:
                 bailout_amount = Decimal("10000000000")  # $10B
                 self.bailout(bank_id, bailout_amount)
-                actions.append({
-                    "type": "bailout",
-                    "institution": bank_id,
-                    "amount": str(bailout_amount),
-                    "damage": "Creating moral hazard"
-                })
+                actions.append(
+                    {
+                        "type": "bailout",
+                        "institution": bank_id,
+                        "amount": str(bailout_amount),
+                        "damage": "Creating moral hazard",
+                    }
+                )
 
         # Record cycle if conditions indicate bust
         if gdp_growth < -0.02 and self.state.malinvestment_induced > 0:
             self.state.cycles_caused += 1
 
         # Add damage report
-        actions.append({
-            "type": "policy_summary",
-            "policy": self.current_policy.value,
-            "inflation_rate": inflation_rate,
-            "target": self.inflation_target,
-            "policy_rate": self.policy_rate,
-            "qe_active": self.qe_active,
-            "qt_active": self.qt_active,
-        })
+        actions.append(
+            {
+                "type": "policy_summary",
+                "policy": self.current_policy.value,
+                "inflation_rate": inflation_rate,
+                "target": self.inflation_target,
+                "policy_rate": self.policy_rate,
+                "qe_active": self.qe_active,
+                "qt_active": self.qt_active,
+            }
+        )
 
         return actions
 
     def _execute_tightening(
-        self,
-        inflation_gap: float,
-        world_state: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, inflation_gap: float, world_state: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Execute tightening policy (QT + rate hikes).
 
@@ -538,12 +537,14 @@ class CentralBank(Agent):
         rate_hike = min(0.0075, aggressiveness * 0.005)  # Max 75bp per step
         if self.policy_rate < self.rate_ceiling:
             self.raise_rates(rate_hike)
-            actions.append({
-                "type": "rate_hike",
-                "amount": rate_hike,
-                "new_rate": self.policy_rate,
-                "reason": f"Fighting inflation ({inflation_gap:.1%} above target)"
-            })
+            actions.append(
+                {
+                    "type": "rate_hike",
+                    "amount": rate_hike,
+                    "new_rate": self.policy_rate,
+                    "reason": f"Fighting inflation ({inflation_gap:.1%} above target)",
+                }
+            )
 
         # 2. QUANTITATIVE TIGHTENING
         # Sell assets proportional to inflation gap
@@ -551,11 +552,13 @@ class CentralBank(Agent):
         if qt_amount > 0:
             sold = self.quantitative_tightening(qt_amount, "treasuries")
             if sold > 0:
-                actions.append({
-                    "type": "quantitative_tightening",
-                    "amount": str(sold),
-                    "reason": "Reducing money supply to fight inflation"
-                })
+                actions.append(
+                    {
+                        "type": "quantitative_tightening",
+                        "amount": str(sold),
+                        "reason": "Reducing money supply to fight inflation",
+                    }
+                )
 
         self.current_policy = MonetaryPolicy.TIGHT
         self.state.current_policy = "tight"
@@ -563,11 +566,8 @@ class CentralBank(Agent):
         return actions
 
     def _execute_easing(
-        self,
-        unemployment: float,
-        gdp_growth: float,
-        world_state: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, unemployment: float, gdp_growth: float, world_state: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Execute easing policy (QE + rate cuts).
 
@@ -588,13 +588,15 @@ class CentralBank(Agent):
         rate_cut = min(0.005, aggressiveness * 0.003)  # Max 50bp per step
         if self.policy_rate > self.rate_floor:
             self.lower_rates(rate_cut)
-            actions.append({
-                "type": "rate_cut",
-                "amount": rate_cut,
-                "new_rate": self.policy_rate,
-                "reason": "Stimulating economy",
-                "damage": "Sending false signals to entrepreneurs"
-            })
+            actions.append(
+                {
+                    "type": "rate_cut",
+                    "amount": rate_cut,
+                    "new_rate": self.policy_rate,
+                    "reason": "Stimulating economy",
+                    "damage": "Sending false signals to entrepreneurs",
+                }
+            )
 
         # 2. QUANTITATIVE EASING
         # More aggressive if rates already at floor (ZIRP)
@@ -606,12 +608,14 @@ class CentralBank(Agent):
         qe_amount = Decimal(str(aggressiveness * 1e10 * qe_multiplier))
         if qe_amount > 0:
             printed = self.quantitative_easing(qe_amount)
-            actions.append({
-                "type": "quantitative_easing",
-                "amount": str(printed),
-                "reason": "Supporting the economy",
-                "damage": "Debasing currency, stealing from savers"
-            })
+            actions.append(
+                {
+                    "type": "quantitative_easing",
+                    "amount": str(printed),
+                    "reason": "Supporting the economy",
+                    "damage": "Debasing currency, stealing from savers",
+                }
+            )
 
         # Emergency mode if severe recession
         if gdp_growth < -0.05 or unemployment > 0.10:
@@ -620,11 +624,13 @@ class CentralBank(Agent):
             # Extra emergency stimulus
             emergency_stimulus = Decimal(str(self.intervention_level * 5e10))
             self.quantitative_easing(emergency_stimulus, "mbs")
-            actions.append({
-                "type": "emergency_stimulus",
-                "amount": str(emergency_stimulus),
-                "reason": "Crisis response"
-            })
+            actions.append(
+                {
+                    "type": "emergency_stimulus",
+                    "amount": str(emergency_stimulus),
+                    "reason": "Crisis response",
+                }
+            )
         else:
             self.current_policy = MonetaryPolicy.EASY
             self.state.current_policy = "easy"
@@ -674,26 +680,22 @@ class CentralBank(Agent):
             "MEX": "Banco de México",
             "BRA": "Banco Central do Brasil",
             "ARG": "Banco Central de la República Argentina",
-
             # Europe
             "GBR": "Bank of England",
             "DEU": "Deutsche Bundesbank",  # via ECB
-            "FRA": "Banque de France",     # via ECB
+            "FRA": "Banque de France",  # via ECB
             "SWE": "Sveriges Riksbank",
             "NOR": "Norges Bank",
             "CHE": "Swiss National Bank",
             "LIE": "Swiss National Bank",  # Uses CHF
-
             # Asia
             "CHN": "People's Bank of China",
             "JPN": "Bank of Japan",
             "IND": "Reserve Bank of India",
             "IDN": "Bank Indonesia",
-
             # Middle East
             "ARE": "Central Bank of UAE",
             "SAU": "Saudi Central Bank (SAMA)",
-
             # Eurasia
             "RUS": "Central Bank of Russia",
             "TUR": "Central Bank of the Republic of Turkey",
@@ -702,34 +704,30 @@ class CentralBank(Agent):
         # Base money supply in local currency (approximate)
         base_money = {
             # Americas (in USD or local)
-            "USA": Decimal("6000000000000"),     # ~$6T USD
-            "CAN": Decimal("300000000000"),      # ~$300B CAD
-            "MEX": Decimal("2500000000000"),     # ~2.5T MXN
-            "BRA": Decimal("500000000000"),      # ~500B BRL
-            "ARG": Decimal("10000000000000"),    # ~10T ARS (high due to inflation)
-
+            "USA": Decimal("6000000000000"),  # ~$6T USD
+            "CAN": Decimal("300000000000"),  # ~$300B CAD
+            "MEX": Decimal("2500000000000"),  # ~2.5T MXN
+            "BRA": Decimal("500000000000"),  # ~500B BRL
+            "ARG": Decimal("10000000000000"),  # ~10T ARS (high due to inflation)
             # Europe
-            "GBR": Decimal("1000000000000"),     # ~£1T
-            "DEU": Decimal("3000000000000"),     # ~€3T (Eurozone share)
-            "FRA": Decimal("2500000000000"),     # ~€2.5T (Eurozone share)
-            "SWE": Decimal("400000000000"),      # ~400B SEK
-            "NOR": Decimal("300000000000"),      # ~300B NOK
-            "CHE": Decimal("800000000000"),      # ~800B CHF
-            "LIE": Decimal("5000000000"),        # ~5B CHF (tiny)
-
+            "GBR": Decimal("1000000000000"),  # ~£1T
+            "DEU": Decimal("3000000000000"),  # ~€3T (Eurozone share)
+            "FRA": Decimal("2500000000000"),  # ~€2.5T (Eurozone share)
+            "SWE": Decimal("400000000000"),  # ~400B SEK
+            "NOR": Decimal("300000000000"),  # ~300B NOK
+            "CHE": Decimal("800000000000"),  # ~800B CHF
+            "LIE": Decimal("5000000000"),  # ~5B CHF (tiny)
             # Asia
-            "CHN": Decimal("40000000000000"),    # ~40T CNY
-            "JPN": Decimal("700000000000000"),   # ~¥700T
-            "IND": Decimal("45000000000000"),    # ~45T INR
+            "CHN": Decimal("40000000000000"),  # ~40T CNY
+            "JPN": Decimal("700000000000000"),  # ~¥700T
+            "IND": Decimal("45000000000000"),  # ~45T INR
             "IDN": Decimal("3000000000000000"),  # ~3000T IDR
-
             # Middle East
-            "ARE": Decimal("500000000000"),      # ~500B AED
-            "SAU": Decimal("2000000000000"),     # ~2T SAR
-
+            "ARE": Decimal("500000000000"),  # ~500B AED
+            "SAU": Decimal("2000000000000"),  # ~2T SAR
             # Eurasia
-            "RUS": Decimal("20000000000000"),    # ~20T RUB
-            "TUR": Decimal("5000000000000"),     # ~5T TRY
+            "RUS": Decimal("20000000000000"),  # ~20T RUB
+            "TUR": Decimal("5000000000000"),  # ~5T TRY
         }
 
         # Intervention levels by regime type (Hoppe hierarchy)
@@ -739,15 +737,12 @@ class CentralBank(Agent):
             # Low intervention (minarchy)
             "CHE": 0.25,  # Switzerland - low intervention
             "LIE": 0.20,  # Liechtenstein - minimal (uses CHF)
-
             # Moderate-low (monarchy)
             "ARE": 0.30,  # UAE - monarchy
             "SAU": 0.30,  # Saudi Arabia - monarchy
-
             # Moderate (liberal democracy)
             "USA": 0.50,  # USA - liberal democracy
             "JPN": 0.50,  # Japan - liberal democracy
-
             # Moderate-high (socialist democracy)
             "GBR": 0.65,  # UK - socialist democracy
             "CAN": 0.65,  # Canada - socialist democracy
@@ -760,7 +755,6 @@ class CentralBank(Agent):
             "NOR": 0.60,  # Norway - moderate, oil wealth
             "IND": 0.65,  # India - socialist democracy
             "IDN": 0.60,  # Indonesia - moderate
-
             # High intervention (totalitarian)
             "CHN": 0.80,  # China - totalitarian
             "RUS": 0.75,  # Russia - totalitarian

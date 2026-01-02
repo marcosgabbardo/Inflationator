@@ -12,15 +12,16 @@ Austrian Theory Relevance:
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Any, Tuple, Optional
 from enum import Enum
+from typing import Any
 
-from src.countries.base import BilateralRelationship, RelationType
 from src.agents.government import RegimeType
+from src.countries.base import BilateralRelationship, RelationType
 
 
 class WarTrigger(str, Enum):
     """Types of events that can trigger war"""
+
     TERRITORIAL_DISPUTE = "territorial_dispute"
     RESOURCE_COMPETITION = "resource_competition"
     IDEOLOGICAL_CONFLICT = "ideological_conflict"
@@ -35,26 +36,28 @@ class WarTrigger(str, Enum):
 
 class WarType(str, Enum):
     """Types of conflicts"""
-    CONVENTIONAL = "conventional"      # Traditional military
-    PROXY = "proxy"                    # Through third parties
-    ECONOMIC = "economic"              # Trade war, sanctions
-    CYBER = "cyber"                    # Cyber warfare
-    LIMITED = "limited"                # Limited strikes
-    TOTAL = "total"                    # Full-scale war
-    NUCLEAR = "nuclear"                # Nuclear exchange
+
+    CONVENTIONAL = "conventional"  # Traditional military
+    PROXY = "proxy"  # Through third parties
+    ECONOMIC = "economic"  # Trade war, sanctions
+    CYBER = "cyber"  # Cyber warfare
+    LIMITED = "limited"  # Limited strikes
+    TOTAL = "total"  # Full-scale war
+    NUCLEAR = "nuclear"  # Nuclear exchange
 
 
 @dataclass
 class WarRiskAssessment:
     """Assessment of war risk between two countries"""
+
     country_a: str
     country_b: str
-    probability: float               # 0-1
-    risk_level: str                  # "low", "moderate", "high", "critical"
-    primary_triggers: List[WarTrigger]
+    probability: float  # 0-1
+    risk_level: str  # "low", "moderate", "high", "critical"
+    primary_triggers: list[WarTrigger]
     most_likely_type: WarType
-    escalation_factors: List[str]
-    de_escalation_factors: List[str]
+    escalation_factors: list[str]
+    de_escalation_factors: list[str]
     economic_impact_estimate: Decimal  # Estimated damage in USD
     nuclear_risk: bool
 
@@ -122,12 +125,9 @@ class WarProbabilityCalculator:
     }
 
     def __init__(self):
-        self._assessments: Dict[Tuple[str, str], WarRiskAssessment] = {}
+        self._assessments: dict[tuple[str, str], WarRiskAssessment] = {}
 
-    def calculate_base_probability(
-        self,
-        relationship: BilateralRelationship
-    ) -> float:
+    def calculate_base_probability(self, relationship: BilateralRelationship) -> float:
         """
         Calculate base war probability from relationship type.
 
@@ -135,17 +135,14 @@ class WarProbabilityCalculator:
             Base probability (0-1)
         """
         base_probs = {
-            RelationType.ALLY: 0.001,     # Very unlikely
-            RelationType.NEUTRAL: 0.01,   # Unlikely
-            RelationType.RIVAL: 0.05,     # Possible
-            RelationType.ENEMY: 0.15,     # Significant risk
+            RelationType.ALLY: 0.001,  # Very unlikely
+            RelationType.NEUTRAL: 0.01,  # Unlikely
+            RelationType.RIVAL: 0.05,  # Possible
+            RelationType.ENEMY: 0.15,  # Significant risk
         }
         return base_probs.get(relationship.relationship_type, 0.01)
 
-    def calculate_historical_factor(
-        self,
-        relationship: BilateralRelationship
-    ) -> float:
+    def calculate_historical_factor(self, relationship: BilateralRelationship) -> float:
         """
         Factor based on historical conflicts.
 
@@ -154,10 +151,7 @@ class WarProbabilityCalculator:
         conflicts = relationship.historical_conflicts
         return min(0.1, conflicts * 0.03)  # Each past conflict adds 3%
 
-    def calculate_tension_factor(
-        self,
-        relationship: BilateralRelationship
-    ) -> float:
+    def calculate_tension_factor(self, relationship: BilateralRelationship) -> float:
         """
         Factor based on current tensions.
 
@@ -166,10 +160,7 @@ class WarProbabilityCalculator:
         num_tensions = len(relationship.current_tensions)
         return min(0.15, num_tensions * 0.03)  # Each tension adds 3%
 
-    def calculate_sanction_factor(
-        self,
-        relationship: BilateralRelationship
-    ) -> float:
+    def calculate_sanction_factor(self, relationship: BilateralRelationship) -> float:
         """
         Factor based on active sanctions.
 
@@ -178,13 +169,12 @@ class WarProbabilityCalculator:
         if not relationship.has_active_sanctions:
             return 0.0
 
-        num_sanctions = len(relationship.sanctions_a_on_b) + len(relationship.sanctions_b_on_a)
+        num_sanctions = len(relationship.sanctions_a_on_b) + len(
+            relationship.sanctions_b_on_a
+        )
         return min(0.1, num_sanctions * 0.02)  # Each sanction adds 2%
 
-    def calculate_trade_dampening(
-        self,
-        relationship: BilateralRelationship
-    ) -> float:
+    def calculate_trade_dampening(self, relationship: BilateralRelationship) -> float:
         """
         Trade interdependence reduces war probability.
 
@@ -203,11 +193,7 @@ class WarProbabilityCalculator:
         else:
             return 0.0  # No dampening
 
-    def calculate_nuclear_dampening(
-        self,
-        country_a: str,
-        country_b: str
-    ) -> float:
+    def calculate_nuclear_dampening(self, country_a: str, country_b: str) -> float:
         """
         Nuclear deterrence (MAD) reduces war probability.
 
@@ -222,11 +208,7 @@ class WarProbabilityCalculator:
             return 0.3  # Reduce by 30% (one-sided deterrence)
         return 0.0
 
-    def calculate_alliance_factor(
-        self,
-        country_a: str,
-        country_b: str
-    ) -> float:
+    def calculate_alliance_factor(self, country_a: str, country_b: str) -> float:
         """
         Alliance membership affects probability.
 
@@ -242,11 +224,7 @@ class WarProbabilityCalculator:
             return 0.02  # Attacking alliance risks escalation
         return 0.0
 
-    def calculate_ideological_factor(
-        self,
-        country_a: str,
-        country_b: str
-    ) -> float:
+    def calculate_ideological_factor(self, country_a: str, country_b: str) -> float:
         """
         Ideological differences increase conflict probability.
 
@@ -269,10 +247,8 @@ class WarProbabilityCalculator:
         return 0.0
 
     def calculate_territorial_factor(
-        self,
-        country_a: str,
-        country_b: str
-    ) -> Tuple[float, List[str]]:
+        self, country_a: str, country_b: str
+    ) -> tuple[float, list[str]]:
         """
         Territorial disputes significantly increase war probability.
 
@@ -289,8 +265,7 @@ class WarProbabilityCalculator:
         return factor, disputes
 
     def calculate_war_probability(
-        self,
-        relationship: BilateralRelationship
+        self, relationship: BilateralRelationship
     ) -> WarRiskAssessment:
         """
         Calculate comprehensive war probability assessment.
@@ -313,7 +288,15 @@ class WarProbabilityCalculator:
         alliance = self.calculate_alliance_factor(country_a, country_b)
 
         # Calculate raw probability
-        raw_prob = base + historical + tensions + sanctions + territorial + ideological + alliance
+        raw_prob = (
+            base
+            + historical
+            + tensions
+            + sanctions
+            + territorial
+            + ideological
+            + alliance
+        )
 
         # Apply dampening factors
         trade_damp = self.calculate_trade_dampening(relationship)
@@ -371,7 +354,9 @@ class WarProbabilityCalculator:
         # De-escalation factors
         de_escalation_factors = []
         if trade_damp > 0:
-            de_escalation_factors.append(f"trade_interdependence_${float(relationship.trade_volume_usd)/1e9:.0f}B")
+            de_escalation_factors.append(
+                f"trade_interdependence_${float(relationship.trade_volume_usd) / 1e9:.0f}B"
+            )
         if nuclear_damp > 0:
             de_escalation_factors.append("nuclear_deterrence")
         if country_a in self.NATO_MEMBERS or country_b in self.NATO_MEMBERS:
@@ -391,7 +376,8 @@ class WarProbabilityCalculator:
             escalation_factors=escalation_factors,
             de_escalation_factors=de_escalation_factors,
             economic_impact_estimate=impact,
-            nuclear_risk=country_a in self.NUCLEAR_POWERS and country_b in self.NUCLEAR_POWERS,
+            nuclear_risk=country_a in self.NUCLEAR_POWERS
+            and country_b in self.NUCLEAR_POWERS,
         )
 
         self._assessments[(country_a, country_b)] = assessment
@@ -399,9 +385,9 @@ class WarProbabilityCalculator:
 
     def get_all_high_risk_pairs(
         self,
-        relationships: Dict[Tuple[str, str], BilateralRelationship],
-        threshold: float = 0.03
-    ) -> List[WarRiskAssessment]:
+        relationships: dict[tuple[str, str], BilateralRelationship],
+        threshold: float = 0.03,
+    ) -> list[WarRiskAssessment]:
         """
         Get all country pairs above a war probability threshold.
 
@@ -427,7 +413,7 @@ class WarProbabilityCalculator:
         self,
         relationship: BilateralRelationship,
         event_type: WarTrigger,
-        severity: float = 0.1
+        severity: float = 0.1,
     ) -> WarRiskAssessment:
         """
         Simulate an escalation event and recalculate probability.
@@ -442,15 +428,16 @@ class WarProbabilityCalculator:
         """
         # Add tension
         relationship.current_tensions.append(event_type.value)
-        relationship.escalation_level = min(1.0, relationship.escalation_level + severity)
+        relationship.escalation_level = min(
+            1.0, relationship.escalation_level + severity
+        )
 
         # Recalculate
         return self.calculate_war_probability(relationship)
 
     def get_global_war_risk(
-        self,
-        relationships: Dict[Tuple[str, str], BilateralRelationship]
-    ) -> Dict[str, Any]:
+        self, relationships: dict[tuple[str, str], BilateralRelationship]
+    ) -> dict[str, Any]:
         """
         Calculate global war risk metrics.
 
@@ -476,7 +463,9 @@ class WarProbabilityCalculator:
 
         critical = [a for a in all_assessments if a.risk_level == "critical"]
         high = [a for a in all_assessments if a.risk_level == "high"]
-        nuclear = [a for a in all_assessments if a.nuclear_risk and a.probability > 0.05]
+        nuclear = [
+            a for a in all_assessments if a.nuclear_risk and a.probability > 0.05
+        ]
 
         return {
             "average_war_probability": avg_prob,
@@ -485,24 +474,24 @@ class WarProbabilityCalculator:
             "high_risk_pairs": len(high),
             "nuclear_risk_pairs": len(nuclear),
             "total_pairs_analyzed": len(all_assessments),
-            "global_risk_level": "critical" if critical else ("high" if high else "moderate"),
-            "most_dangerous_pair": max(all_assessments, key=lambda x: x.probability) if all_assessments else None,
+            "global_risk_level": "critical"
+            if critical
+            else ("high" if high else "moderate"),
+            "most_dangerous_pair": max(all_assessments, key=lambda x: x.probability)
+            if all_assessments
+            else None,
         }
 
 
 # Convenience functions
-def calculate_war_probability(
-    relationship: BilateralRelationship
-) -> float:
+def calculate_war_probability(relationship: BilateralRelationship) -> float:
     """Calculate war probability for a relationship"""
     calc = WarProbabilityCalculator()
     assessment = calc.calculate_war_probability(relationship)
     return assessment.probability
 
 
-def get_war_risk_assessment(
-    relationship: BilateralRelationship
-) -> WarRiskAssessment:
+def get_war_risk_assessment(relationship: BilateralRelationship) -> WarRiskAssessment:
     """Get full war risk assessment"""
     calc = WarProbabilityCalculator()
     return calc.calculate_war_probability(relationship)

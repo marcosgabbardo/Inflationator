@@ -9,17 +9,16 @@ Based on Austrian Economics price theory:
 - Market clearing through voluntary exchange
 """
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Dict, Any, List, Optional, Tuple
-from enum import Enum
 import uuid
-import random
-from collections import defaultdict
+from dataclasses import dataclass
+from decimal import Decimal
+from enum import Enum
+from typing import Any
 
 
 class MarketType(str, Enum):
     """Types of markets"""
+
     LABOR = "labor"
     CONSUMER_GOODS = "consumer_goods"
     CAPITAL_GOODS = "capital_goods"
@@ -30,6 +29,7 @@ class MarketType(str, Enum):
 @dataclass
 class Order:
     """A buy or sell order"""
+
     id: str
     agent_id: str
     is_buy: bool  # True = buy order, False = sell order
@@ -45,6 +45,7 @@ class Order:
 @dataclass
 class Trade:
     """A completed trade"""
+
     id: str
     buyer_id: str
     seller_id: str
@@ -69,8 +70,8 @@ class OrderBook:
     """
 
     def __init__(self):
-        self.buy_orders: List[Order] = []   # Sorted by price DESC
-        self.sell_orders: List[Order] = []  # Sorted by price ASC
+        self.buy_orders: list[Order] = []  # Sorted by price DESC
+        self.sell_orders: list[Order] = []  # Sorted by price ASC
 
     def add_buy_order(self, order: Order):
         """Add a buy order (sorted by price descending)"""
@@ -82,19 +83,19 @@ class OrderBook:
         self.sell_orders.append(order)
         self.sell_orders.sort(key=lambda o: o.price)
 
-    def get_best_bid(self) -> Optional[Decimal]:
+    def get_best_bid(self) -> Decimal | None:
         """Highest buy price"""
         if self.buy_orders:
             return self.buy_orders[0].price
         return None
 
-    def get_best_ask(self) -> Optional[Decimal]:
+    def get_best_ask(self) -> Decimal | None:
         """Lowest sell price"""
         if self.sell_orders:
             return self.sell_orders[0].price
         return None
 
-    def get_spread(self) -> Optional[Decimal]:
+    def get_spread(self) -> Decimal | None:
         """Bid-ask spread"""
         bid = self.get_best_bid()
         ask = self.get_best_ask()
@@ -102,7 +103,7 @@ class OrderBook:
             return ask - bid
         return None
 
-    def match_orders(self, tick: int) -> List[Trade]:
+    def match_orders(self, tick: int) -> list[Trade]:
         """
         Match buy and sell orders.
 
@@ -167,7 +168,7 @@ class Market:
 
     def __init__(
         self,
-        market_id: Optional[str] = None,
+        market_id: str | None = None,
         name: str = "Unnamed Market",
         market_type: MarketType = MarketType.CONSUMER_GOODS,
         country: str = "USA",
@@ -181,11 +182,11 @@ class Market:
         # Price
         self.current_price = initial_price
         self.previous_price = initial_price
-        self.price_history: List[Decimal] = [initial_price]
+        self.price_history: list[Decimal] = [initial_price]
 
         # Volume
         self.volume = Decimal("0")
-        self.volume_history: List[Decimal] = []
+        self.volume_history: list[Decimal] = []
 
         # Order book
         self.order_book = OrderBook()
@@ -199,7 +200,7 @@ class Market:
         self.liquidity = 1.0
 
         # Trade history
-        self.trades: List[Trade] = []
+        self.trades: list[Trade] = []
 
     @property
     def price_change(self) -> Decimal:
@@ -218,11 +219,7 @@ class Market:
     # ===========================================
 
     def submit_buy_order(
-        self,
-        agent_id: str,
-        quantity: Decimal,
-        max_price: Decimal,
-        tick: int
+        self, agent_id: str, quantity: Decimal, max_price: Decimal, tick: int
     ) -> Order:
         """Submit a buy order"""
         order = Order(
@@ -238,11 +235,7 @@ class Market:
         return order
 
     def submit_sell_order(
-        self,
-        agent_id: str,
-        quantity: Decimal,
-        min_price: Decimal,
-        tick: int
+        self, agent_id: str, quantity: Decimal, min_price: Decimal, tick: int
     ) -> Order:
         """Submit a sell order"""
         order = Order(
@@ -261,7 +254,7 @@ class Market:
     # PRICE DISCOVERY
     # ===========================================
 
-    def clear_market(self, tick: int) -> List[Trade]:
+    def clear_market(self, tick: int) -> list[Trade]:
         """
         Clear the market - match orders and discover price.
 
@@ -349,14 +342,14 @@ class Market:
         if len(self.price_history) >= 10:
             recent_prices = self.price_history[-10:]
             returns = [
-                float((recent_prices[i] - recent_prices[i-1]) / recent_prices[i-1])
+                float((recent_prices[i] - recent_prices[i - 1]) / recent_prices[i - 1])
                 for i in range(1, len(recent_prices))
-                if recent_prices[i-1] > 0
+                if recent_prices[i - 1] > 0
             ]
             if returns:
                 mean_return = sum(returns) / len(returns)
                 variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
-                self.volatility = variance ** 0.5
+                self.volatility = variance**0.5
 
         # Liquidity (based on order book depth)
         bid = self.order_book.get_best_bid()
@@ -371,7 +364,7 @@ class Market:
     # MARKET INFORMATION
     # ===========================================
 
-    def get_market_data(self) -> Dict[str, Any]:
+    def get_market_data(self) -> dict[str, Any]:
         """Get current market data"""
         return {
             "id": self.id,
@@ -388,7 +381,7 @@ class Market:
             "spread": str(self.order_book.get_spread() or 0),
         }
 
-    def get_price_signal(self) -> Dict[str, Any]:
+    def get_price_signal(self) -> dict[str, Any]:
         """
         Get price signal information.
 
@@ -400,7 +393,11 @@ class Market:
         trend = "neutral"
         if len(self.price_history) >= 5:
             recent_avg = sum(self.price_history[-5:]) / 5
-            older_avg = sum(self.price_history[-10:-5]) / 5 if len(self.price_history) >= 10 else recent_avg
+            older_avg = (
+                sum(self.price_history[-10:-5]) / 5
+                if len(self.price_history) >= 10
+                else recent_avg
+            )
 
             if recent_avg > older_avg * Decimal("1.05"):
                 trend = "bullish"
@@ -411,10 +408,14 @@ class Market:
             "current_price": str(self.current_price),
             "trend": trend,
             "volatility": self.volatility,
-            "signal": "increase_production" if trend == "bullish" else "decrease_production" if trend == "bearish" else "maintain",
+            "signal": "increase_production"
+            if trend == "bullish"
+            else "decrease_production"
+            if trend == "bearish"
+            else "maintain",
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize market"""
         return {
             "id": self.id,
@@ -437,13 +438,13 @@ class MarketManager:
 
     def __init__(self, country: str = "USA"):
         self.country = country
-        self.markets: Dict[str, Market] = {}
+        self.markets: dict[str, Market] = {}
 
     def create_market(
         self,
         name: str,
         market_type: MarketType,
-        initial_price: Decimal = Decimal("100")
+        initial_price: Decimal = Decimal("100"),
     ) -> Market:
         """Create a new market"""
         market = Market(
@@ -455,22 +456,22 @@ class MarketManager:
         self.markets[market.id] = market
         return market
 
-    def get_market(self, market_id: str) -> Optional[Market]:
+    def get_market(self, market_id: str) -> Market | None:
         """Get a market by ID"""
         return self.markets.get(market_id)
 
-    def get_markets_by_type(self, market_type: MarketType) -> List[Market]:
+    def get_markets_by_type(self, market_type: MarketType) -> list[Market]:
         """Get all markets of a type"""
         return [m for m in self.markets.values() if m.market_type == market_type]
 
-    def get_market_by_name(self, name: str) -> Optional[Market]:
+    def get_market_by_name(self, name: str) -> Market | None:
         """Get a market by name"""
         for market in self.markets.values():
             if market.name == name:
                 return market
         return None
 
-    def clear_all_markets(self, tick: int) -> Dict[str, List[Trade]]:
+    def clear_all_markets(self, tick: int) -> dict[str, list[Trade]]:
         """Clear all markets and return trades"""
         all_trades = {}
         for market_id, market in self.markets.items():
@@ -479,7 +480,7 @@ class MarketManager:
                 all_trades[market_id] = trades
         return all_trades
 
-    def get_all_prices(self) -> Dict[str, Decimal]:
+    def get_all_prices(self) -> dict[str, Decimal]:
         """Get prices for all markets"""
         return {m.name: m.current_price for m in self.markets.values()}
 
@@ -511,10 +512,10 @@ class MarketManager:
         # Exclude crypto and commodities which are investment assets, not consumption
         weights = {
             MarketType.CONSUMER_GOODS: 0.7,  # Main component like CPI
-            MarketType.LABOR: 0.3,           # Wage inflation component
-            MarketType.CAPITAL_GOODS: 0.0,   # Not in CPI
-            MarketType.COMMODITIES: 0.0,     # Exclude - too volatile, investment asset
-            MarketType.CRYPTO: 0.0,          # Exclude - investment asset, not consumption
+            MarketType.LABOR: 0.3,  # Wage inflation component
+            MarketType.CAPITAL_GOODS: 0.0,  # Not in CPI
+            MarketType.COMMODITIES: 0.0,  # Exclude - too volatile, investment asset
+            MarketType.CRYPTO: 0.0,  # Exclude - investment asset, not consumption
         }
 
         for market in self.markets.values():
@@ -538,6 +539,7 @@ class MarketManager:
                     # Soft cap using tanh to smooth extreme values
                     # This maps any value to (-0.3, 0.3) range smoothly
                     import math
+
                     annualized_change = 0.3 * math.tanh(annualized_change / 0.3)
                     weighted_changes.append(annualized_change * weight)
                     total_weight += weight
@@ -549,6 +551,7 @@ class MarketManager:
 
                 if old_price > 0:
                     import math
+
                     change = float((current_price - old_price) / old_price)
                     # Annualize and soft cap using tanh (12 months = 1 year)
                     annualized_change = change * 12
@@ -563,7 +566,9 @@ class MarketManager:
     def setup_default_markets(self) -> None:
         """Create default markets for MVP"""
         # Consumer goods markets
-        self.create_market("Food & Groceries", MarketType.CONSUMER_GOODS, Decimal("100"))
+        self.create_market(
+            "Food & Groceries", MarketType.CONSUMER_GOODS, Decimal("100")
+        )
         self.create_market("Housing & Rent", MarketType.CONSUMER_GOODS, Decimal("2000"))
         self.create_market("General Consumer", MarketType.CONSUMER_GOODS, Decimal("50"))
 

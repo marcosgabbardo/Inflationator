@@ -4,16 +4,22 @@ Database Connection Manager
 Handles MySQL connection using SQLAlchemy.
 """
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
-from contextlib import contextmanager
-from typing import Generator
-import sys
 import os
+import sys
+from collections.abc import Generator
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import QueuePool
+
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Add config to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from config.settings import settings
 
 
@@ -72,17 +78,25 @@ class DatabaseManager:
             session.close()
 
     def test_connection(self) -> bool:
-        """Test database connectivity"""
+        """Test database connectivity.
+
+        Returns:
+            True if connection is successful, False otherwise.
+        """
         try:
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             return True
-        except Exception as e:
-            print(f"Database connection failed: {e}")
+        except SQLAlchemyError as e:
+            logger.error("Database connection failed: %s", e)
             return False
 
     def create_database(self) -> bool:
-        """Create database if it doesn't exist"""
+        """Create database if it doesn't exist.
+
+        Returns:
+            True if database creation is successful, False otherwise.
+        """
         try:
             # Connect without database name first
             temp_url = (
@@ -92,29 +106,33 @@ class DatabaseManager:
             temp_engine = create_engine(temp_url)
 
             with temp_engine.connect() as conn:
-                conn.execute(text(
-                    f"CREATE DATABASE IF NOT EXISTS {settings.db_name} "
-                    "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-                ))
+                conn.execute(
+                    text(
+                        f"CREATE DATABASE IF NOT EXISTS {settings.db_name} "
+                        "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    )
+                )
                 conn.commit()
 
             temp_engine.dispose()
             return True
-        except Exception as e:
-            print(f"Failed to create database: {e}")
+        except SQLAlchemyError as e:
+            logger.error("Failed to create database: %s", e)
             return False
 
-    def init_schema(self):
-        """Initialize database schema from models"""
+    def init_schema(self) -> None:
+        """Initialize database schema from models."""
         from src.database.models import Base
-        Base.metadata.create_all(self.engine)
-        print("Database schema initialized successfully")
 
-    def drop_all(self):
-        """Drop all tables (use with caution!)"""
+        Base.metadata.create_all(self.engine)
+        logger.info("Database schema initialized successfully")
+
+    def drop_all(self) -> None:
+        """Drop all tables (use with caution!)."""
         from src.database.models import Base
+
         Base.metadata.drop_all(self.engine)
-        print("All tables dropped")
+        logger.info("All tables dropped")
 
     def close(self):
         """Close all connections"""

@@ -11,11 +11,11 @@ Austrian Theory Relevance:
 """
 
 import asyncio
-from decimal import Decimal
-from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
-import yfinance as yf
+from typing import Any
+
 import httpx
+import yfinance as yf
 
 
 class MarketSentimentCollector:
@@ -29,19 +29,19 @@ class MarketSentimentCollector:
     """
 
     TICKERS = {
-        "sp500": "^GSPC",           # S&P 500
-        "vix": "^VIX",              # Volatility Index (Fear Index)
-        "dxy": "DX-Y.NYB",          # US Dollar Index
-        "us10y": "^TNX",            # 10-Year Treasury Yield
-        "us2y": "^IRX",             # 2-Year Treasury Yield (proxy: 13-week)
-        "nasdaq": "^IXIC",          # NASDAQ
-        "dow": "^DJI",              # Dow Jones
-        "russell": "^RUT",          # Russell 2000 (small caps)
+        "sp500": "^GSPC",  # S&P 500
+        "vix": "^VIX",  # Volatility Index (Fear Index)
+        "dxy": "DX-Y.NYB",  # US Dollar Index
+        "us10y": "^TNX",  # 10-Year Treasury Yield
+        "us2y": "^IRX",  # 2-Year Treasury Yield (proxy: 13-week)
+        "nasdaq": "^IXIC",  # NASDAQ
+        "dow": "^DJI",  # Dow Jones
+        "russell": "^RUT",  # Russell 2000 (small caps)
     }
 
     def __init__(self):
-        self._cache: Dict[str, Any] = {}
-        self._cache_time: Optional[datetime] = None
+        self._cache: dict[str, Any] = {}
+        self._cache_time: datetime | None = None
         self._cache_ttl = timedelta(minutes=15)
 
     def _is_cache_valid(self) -> bool:
@@ -49,7 +49,7 @@ class MarketSentimentCollector:
             return False
         return datetime.now() - self._cache_time < self._cache_ttl
 
-    def get_market_indices(self) -> Dict[str, Any]:
+    def get_market_indices(self) -> dict[str, Any]:
         """
         Get current market indices.
 
@@ -86,7 +86,7 @@ class MarketSentimentCollector:
         self._cache_time = datetime.now()
         return indices
 
-    def _get_mock_index(self, name: str) -> Dict[str, Any]:
+    def _get_mock_index(self, name: str) -> dict[str, Any]:
         """Return mock index data"""
         mocks = {
             "sp500": {"value": 5000.0, "change_5d_pct": 0.5},
@@ -100,7 +100,7 @@ class MarketSentimentCollector:
         }
         return mocks.get(name, {"value": 100.0, "change_5d_pct": 0.0})
 
-    async def get_crypto_fear_greed(self) -> Dict[str, Any]:
+    async def get_crypto_fear_greed(self) -> dict[str, Any]:
         """
         Get Crypto Fear & Greed Index from Alternative.me
 
@@ -142,7 +142,7 @@ class MarketSentimentCollector:
             "history_7d": [],
         }
 
-    def get_yield_curve(self) -> Dict[str, Any]:
+    def get_yield_curve(self) -> dict[str, Any]:
         """
         Get Treasury yield curve data.
 
@@ -181,7 +181,7 @@ class MarketSentimentCollector:
             "recession_signal": False,
         }
 
-    def get_dollar_strength(self) -> Dict[str, Any]:
+    def get_dollar_strength(self) -> dict[str, Any]:
         """
         Get US Dollar strength indicators.
 
@@ -196,13 +196,19 @@ class MarketSentimentCollector:
 
             if not hist.empty:
                 current = float(hist["Close"].iloc[-1])
-                month_ago = float(hist["Close"].iloc[-22]) if len(hist) > 22 else current
+                month_ago = (
+                    float(hist["Close"].iloc[-22]) if len(hist) > 22 else current
+                )
                 year_start = float(hist["Close"].iloc[0])
 
                 return {
                     "dxy_current": round(current, 2),
-                    "change_1m_pct": round(((current - month_ago) / month_ago) * 100, 2),
-                    "change_ytd_pct": round(((current - year_start) / year_start) * 100, 2),
+                    "change_1m_pct": round(
+                        ((current - month_ago) / month_ago) * 100, 2
+                    ),
+                    "change_ytd_pct": round(
+                        ((current - year_start) / year_start) * 100, 2
+                    ),
                     "high_1y": round(float(hist["High"].max()), 2),
                     "low_1y": round(float(hist["Low"].min()), 2),
                 }
@@ -217,7 +223,7 @@ class MarketSentimentCollector:
             "low_1y": 100.0,
         }
 
-    def calculate_market_fear_level(self) -> Dict[str, Any]:
+    def calculate_market_fear_level(self) -> dict[str, Any]:
         """
         Calculate aggregate fear level from multiple indicators.
 
@@ -282,7 +288,7 @@ class MarketSentimentCollector:
             },
         }
 
-    def get_historical_volatility(self, period_years: int = 10) -> Dict[str, Any]:
+    def get_historical_volatility(self, period_years: int = 10) -> dict[str, Any]:
         """
         Get historical volatility data to understand market sensitivity.
 
@@ -297,7 +303,9 @@ class MarketSentimentCollector:
             if not hist.empty:
                 # Calculate rolling volatility
                 hist["returns"] = hist["Close"].pct_change()
-                hist["volatility_30d"] = hist["returns"].rolling(30).std() * (252 ** 0.5) * 100
+                hist["volatility_30d"] = (
+                    hist["returns"].rolling(30).std() * (252**0.5) * 100
+                )
 
                 current_vol = float(hist["volatility_30d"].iloc[-1])
                 avg_vol = float(hist["volatility_30d"].mean())
@@ -310,9 +318,14 @@ class MarketSentimentCollector:
                     "current_volatility": round(current_vol, 2),
                     "average_volatility": round(avg_vol, 2),
                     "max_volatility": round(max_vol, 2),
-                    "vol_vs_average_ratio": round(current_vol / avg_vol, 2) if avg_vol > 0 else 1.0,
-                    "high_vol_periods_count": len(high_vol_periods) // 30,  # Approximate months
-                    "market_stress_level": "high" if current_vol > avg_vol * 1.5 else "normal",
+                    "vol_vs_average_ratio": round(current_vol / avg_vol, 2)
+                    if avg_vol > 0
+                    else 1.0,
+                    "high_vol_periods_count": len(high_vol_periods)
+                    // 30,  # Approximate months
+                    "market_stress_level": "high"
+                    if current_vol > avg_vol * 1.5
+                    else "normal",
                 }
         except Exception as e:
             print(f"Error calculating historical volatility: {e}")
@@ -328,19 +341,19 @@ class MarketSentimentCollector:
 
 
 # Synchronous wrappers
-def get_market_fear_level() -> Dict[str, Any]:
+def get_market_fear_level() -> dict[str, Any]:
     """Get aggregate market fear level"""
     collector = MarketSentimentCollector()
     return collector.calculate_market_fear_level()
 
 
-def get_market_indices() -> Dict[str, Any]:
+def get_market_indices() -> dict[str, Any]:
     """Get current market indices"""
     collector = MarketSentimentCollector()
     return collector.get_market_indices()
 
 
-def get_crypto_fear_greed() -> Dict[str, Any]:
+def get_crypto_fear_greed() -> dict[str, Any]:
     """Get crypto fear & greed index"""
     collector = MarketSentimentCollector()
     return asyncio.run(collector.get_crypto_fear_greed())

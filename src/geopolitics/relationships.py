@@ -9,28 +9,28 @@ Austrian Theory Relevance:
 - Wars destroy capital and increase government power
 """
 
-from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Any, Optional, Tuple
 from enum import Enum
+from typing import Any
 
-from src.countries.base import RelationType, BilateralRelationship
+from src.countries.base import BilateralRelationship, RelationType
 
 
 class SanctionType(str, Enum):
     """Types of economic sanctions"""
-    TRADE_EMBARGO = "trade_embargo"         # Full trade ban
-    ASSET_FREEZE = "asset_freeze"           # Freeze foreign assets
-    FINANCIAL_BAN = "financial_ban"         # SWIFT/banking exclusion
-    ARMS_EMBARGO = "arms_embargo"           # Military trade ban
-    TRAVEL_BAN = "travel_ban"               # Visa restrictions
-    SECTOR_TARGETED = "sector_targeted"     # Specific sector sanctions
-    SECONDARY = "secondary"                 # Sanctions on third parties
+
+    TRADE_EMBARGO = "trade_embargo"  # Full trade ban
+    ASSET_FREEZE = "asset_freeze"  # Freeze foreign assets
+    FINANCIAL_BAN = "financial_ban"  # SWIFT/banking exclusion
+    ARMS_EMBARGO = "arms_embargo"  # Military trade ban
+    TRAVEL_BAN = "travel_ban"  # Visa restrictions
+    SECTOR_TARGETED = "sector_targeted"  # Specific sector sanctions
+    SECONDARY = "secondary"  # Sanctions on third parties
 
 
 # Initial relationships between all 20 countries
 # Format: (country_a, country_b): {relationship_data}
-INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
+INITIAL_RELATIONSHIPS: dict[tuple[str, str], dict[str, Any]] = {
     # ============================================
     # USA RELATIONSHIPS
     # ============================================
@@ -46,7 +46,11 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "strength": -0.7,
         "trade_volume": Decimal("30000000000"),  # $30B
         "tensions": ["ukraine", "nato_expansion", "nuclear_arms"],
-        "sanctions_a_on_b": [SanctionType.FINANCIAL_BAN, SanctionType.ASSET_FREEZE, SanctionType.SECTOR_TARGETED],
+        "sanctions_a_on_b": [
+            SanctionType.FINANCIAL_BAN,
+            SanctionType.ASSET_FREEZE,
+            SanctionType.SECTOR_TARGETED,
+        ],
         "war_prob": 0.12,
     },
     ("USA", "GBR"): {
@@ -112,7 +116,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "tensions": ["s400_purchase", "kurdish_policy"],
         "war_prob": 0.01,
     },
-
     # ============================================
     # CHINA RELATIONSHIPS
     # ============================================
@@ -161,7 +164,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "tensions": ["south_china_sea"],
         "war_prob": 0.02,
     },
-
     # ============================================
     # BRAZIL-ARGENTINA (RIVALS per user request)
     # ============================================
@@ -169,10 +171,13 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "type": RelationType.RIVAL,
         "strength": -0.2,
         "trade_volume": Decimal("25000000000"),
-        "tensions": ["mercosur_disputes", "currency_competition", "regional_leadership"],
+        "tensions": [
+            "mercosur_disputes",
+            "currency_competition",
+            "regional_leadership",
+        ],
         "war_prob": 0.02,
     },
-
     # ============================================
     # EUROPE RELATIONSHIPS
     # ============================================
@@ -222,7 +227,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "trade_volume": Decimal("100000000000"),
         "war_prob": 0.0,
     },
-
     # ============================================
     # MIDDLE EAST
     # ============================================
@@ -239,7 +243,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "tensions": ["regional_hegemony", "muslim_brotherhood", "qatar"],
         "war_prob": 0.03,
     },
-
     # ============================================
     # RUSSIA CONFLICTS
     # ============================================
@@ -264,7 +267,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "tensions": ["arctic", "nato", "svalbard"],
         "war_prob": 0.03,
     },
-
     # ============================================
     # LATIN AMERICA
     # ============================================
@@ -282,7 +284,6 @@ INITIAL_RELATIONSHIPS: Dict[Tuple[str, str], Dict[str, Any]] = {
         "historical_conflicts": 1,  # 1982 war
         "war_prob": 0.01,
     },
-
     # ============================================
     # ASIA
     # ============================================
@@ -313,7 +314,7 @@ class RelationshipManager:
     """
 
     def __init__(self):
-        self._relationships: Dict[Tuple[str, str], BilateralRelationship] = {}
+        self._relationships: dict[tuple[str, str], BilateralRelationship] = {}
         self._initialize_relationships()
 
     def _initialize_relationships(self):
@@ -360,49 +361,44 @@ class RelationshipManager:
         )
 
     def get_relationship(
-        self,
-        country_a: str,
-        country_b: str
-    ) -> Optional[BilateralRelationship]:
+        self, country_a: str, country_b: str
+    ) -> BilateralRelationship | None:
         """Get relationship between two countries"""
         return self._relationships.get((country_a, country_b))
 
-    def get_all_relationships_for(
-        self,
-        country: str
-    ) -> List[BilateralRelationship]:
+    def get_all_relationships_for(self, country: str) -> list[BilateralRelationship]:
         """Get all relationships for a country"""
-        return [
-            rel for (a, b), rel in self._relationships.items()
-            if a == country
-        ]
+        return [rel for (a, b), rel in self._relationships.items() if a == country]
 
-    def get_allies(self, country: str) -> List[str]:
+    def get_allies(self, country: str) -> list[str]:
         """Get list of allied countries"""
         return [
-            rel.country_b for rel in self.get_all_relationships_for(country)
+            rel.country_b
+            for rel in self.get_all_relationships_for(country)
             if rel.relationship_type == RelationType.ALLY
         ]
 
-    def get_enemies(self, country: str) -> List[str]:
+    def get_enemies(self, country: str) -> list[str]:
         """Get list of enemy countries"""
         return [
-            rel.country_b for rel in self.get_all_relationships_for(country)
+            rel.country_b
+            for rel in self.get_all_relationships_for(country)
             if rel.relationship_type == RelationType.ENEMY
         ]
 
-    def get_rivals(self, country: str) -> List[str]:
+    def get_rivals(self, country: str) -> list[str]:
         """Get list of rival countries"""
         return [
-            rel.country_b for rel in self.get_all_relationships_for(country)
+            rel.country_b
+            for rel in self.get_all_relationships_for(country)
             if rel.relationship_type == RelationType.RIVAL
         ]
 
     def get_trade_partners(
         self,
         country: str,
-        min_volume: Decimal = Decimal("10000000000")  # $10B
-    ) -> List[Tuple[str, Decimal]]:
+        min_volume: Decimal = Decimal("10000000000"),  # $10B
+    ) -> list[tuple[str, Decimal]]:
         """Get major trade partners (sorted by volume)"""
         partners = []
         for rel in self.get_all_relationships_for(country):
@@ -411,9 +407,8 @@ class RelationshipManager:
         return sorted(partners, key=lambda x: x[1], reverse=True)
 
     def get_high_war_risk_pairs(
-        self,
-        threshold: float = 0.03
-    ) -> List[Tuple[str, str, float]]:
+        self, threshold: float = 0.03
+    ) -> list[tuple[str, str, float]]:
         """Get country pairs with high war probability"""
         seen = set()
         high_risk = []
@@ -426,7 +421,7 @@ class RelationshipManager:
 
         return sorted(high_risk, key=lambda x: x[2], reverse=True)
 
-    def get_sanctioned_pairs(self) -> List[Tuple[str, str, List[str]]]:
+    def get_sanctioned_pairs(self) -> list[tuple[str, str, list[str]]]:
         """Get all country pairs with active sanctions"""
         sanctioned = []
         seen = set()
@@ -440,12 +435,7 @@ class RelationshipManager:
 
         return sanctioned
 
-    def apply_tariff(
-        self,
-        imposer: str,
-        target: str,
-        rate: float
-    ):
+    def apply_tariff(self, imposer: str, target: str, rate: float):
         """Apply tariff from one country to another"""
         rel = self._relationships.get((imposer, target))
         if rel:
@@ -455,12 +445,7 @@ class RelationshipManager:
             if inv:
                 inv.tariff_b_to_a = rate
 
-    def apply_sanction(
-        self,
-        imposer: str,
-        target: str,
-        sanction_type: SanctionType
-    ):
+    def apply_sanction(self, imposer: str, target: str, sanction_type: SanctionType):
         """Apply sanction from one country to another"""
         rel = self._relationships.get((imposer, target))
         if rel:
@@ -478,11 +463,7 @@ class RelationshipManager:
                 inv.escalation_level = rel.escalation_level
 
     def escalate_tension(
-        self,
-        country_a: str,
-        country_b: str,
-        tension: str,
-        amount: float = 0.1
+        self, country_a: str, country_b: str, tension: str, amount: float = 0.1
     ):
         """Escalate tension between two countries"""
         rel = self._relationships.get((country_a, country_b))
@@ -501,12 +482,7 @@ class RelationshipManager:
                 inv.war_probability = rel.war_probability
                 inv.strength = rel.strength
 
-    def de_escalate(
-        self,
-        country_a: str,
-        country_b: str,
-        amount: float = 0.1
-    ):
+    def de_escalate(self, country_a: str, country_b: str, amount: float = 0.1):
         """De-escalate tension between two countries"""
         rel = self._relationships.get((country_a, country_b))
         if rel:
@@ -521,10 +497,7 @@ class RelationshipManager:
                 inv.war_probability = rel.war_probability
                 inv.strength = rel.strength
 
-    def calculate_trade_impact(
-        self,
-        country: str
-    ) -> Dict[str, Any]:
+    def calculate_trade_impact(self, country: str) -> dict[str, Any]:
         """
         Calculate total trade impact for a country.
 
@@ -554,10 +527,12 @@ class RelationshipManager:
             "total_tariff_cost": total_tariff_paid,
             "sanctioned_trade_volume": sanctioned_trade,
             "blocked_trade_volume": blocked_trade,
-            "trade_freedom": float(1 - (blocked_trade / total_trade)) if total_trade > 0 else 1.0,
+            "trade_freedom": float(1 - (blocked_trade / total_trade))
+            if total_trade > 0
+            else 1.0,
         }
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of all relationships"""
         unique_pairs = set()
         allies = 0

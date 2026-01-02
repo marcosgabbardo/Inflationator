@@ -5,66 +5,94 @@ Creates professional PDF reports in academic whitepaper format,
 similar to Satoshi Nakamoto's Bitcoin whitepaper.
 """
 
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm, mm
-from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle,
-    PageBreak, KeepTogether, ListFlowable, ListItem
-)
-from reportlab.platypus.flowables import HRFlowable
-from reportlab.pdfbase import pdfmetrics
-
-from typing import List, Dict, Any, Optional
-from pathlib import Path
+import io
 from datetime import datetime
 from decimal import Decimal
-import io
+from pathlib import Path
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    Image,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+from reportlab.platypus.flowables import HRFlowable
 
 
 def format_currency(value: Any, decimals: int = 0) -> str:
-    """Format a value as currency"""
+    """Format a value as currency.
+
+    Args:
+        value: The numeric value to format (can be Decimal, str, int, or float).
+        decimals: Number of decimal places for values under 1000.
+
+    Returns:
+        Formatted currency string with appropriate suffix (T, B, M, K).
+    """
     try:
         if isinstance(value, Decimal):
             num = float(value)
         elif isinstance(value, str):
-            num = float(value.replace(',', ''))
+            num = float(value.replace(",", ""))
         else:
             num = float(value)
 
         if abs(num) >= 1e12:
-            return f"${num/1e12:,.2f}T"
+            return f"${num / 1e12:,.2f}T"
         elif abs(num) >= 1e9:
-            return f"${num/1e9:,.2f}B"
+            return f"${num / 1e9:,.2f}B"
         elif abs(num) >= 1e6:
-            return f"${num/1e6:,.2f}M"
+            return f"${num / 1e6:,.2f}M"
         elif abs(num) >= 1e3:
-            return f"${num/1e3:,.1f}K"
+            return f"${num / 1e3:,.1f}K"
         else:
             return f"${num:,.{decimals}f}"
-    except:
+    except (ValueError, TypeError, AttributeError):
         return str(value)
 
 
 def format_percent(value: Any, decimals: int = 1) -> str:
-    """Format a value as percentage"""
+    """Format a value as percentage.
+
+    Args:
+        value: The numeric value to format.
+        decimals: Number of decimal places.
+
+    Returns:
+        Formatted percentage string. Values < 1 are treated as decimals.
+    """
     try:
         num = float(value)
         if num < 1:  # Already decimal
-            return f"{num*100:.{decimals}f}%"
+            return f"{num * 100:.{decimals}f}%"
         return f"{num:.{decimals}f}%"
-    except:
+    except (ValueError, TypeError):
         return str(value)
 
 
 def format_number(value: Any, decimals: int = 2) -> str:
-    """Format a number with thousands separator"""
+    """Format a number with thousands separator.
+
+    Args:
+        value: The numeric value to format.
+        decimals: Number of decimal places.
+
+    Returns:
+        Formatted number string with thousands separators.
+    """
     try:
         num = float(value) if not isinstance(value, (int, float)) else value
         return f"{num:,.{decimals}f}"
-    except:
+    except (ValueError, TypeError):
         return str(value)
 
 
@@ -83,7 +111,7 @@ class PDFReportBuilder:
         self,
         output_path: Path,
         title: str = "Economic Simulation Report",
-        author: str = "Inflationator"
+        author: str = "Inflationator",
     ):
         self.output_path = output_path
         self.title = title
@@ -94,10 +122,10 @@ class PDFReportBuilder:
         self.doc = SimpleDocTemplate(
             str(output_path),
             pagesize=A4,
-            rightMargin=2.5*cm,
-            leftMargin=2.5*cm,
-            topMargin=2*cm,
-            bottomMargin=2*cm,
+            rightMargin=2.5 * cm,
+            leftMargin=2.5 * cm,
+            topMargin=2 * cm,
+            bottomMargin=2 * cm,
         )
 
         # Styles
@@ -105,136 +133,158 @@ class PDFReportBuilder:
         self._setup_academic_styles()
 
         # Content elements
-        self.elements: List[Any] = []
+        self.elements: list[Any] = []
 
     def _setup_academic_styles(self):
         """Setup academic/whitepaper paragraph styles"""
 
         # Title - centered, bold
-        self.styles.add(ParagraphStyle(
-            name='PaperTitle',
-            parent=self.styles['Title'],
-            fontSize=18,
-            spaceAfter=6,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-            fontName='Times-Bold',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="PaperTitle",
+                parent=self.styles["Title"],
+                fontSize=18,
+                spaceAfter=6,
+                alignment=TA_CENTER,
+                textColor=colors.black,
+                fontName="Times-Bold",
+            )
+        )
 
         # Author/subtitle
-        self.styles.add(ParagraphStyle(
-            name='PaperAuthor',
-            parent=self.styles['Normal'],
-            fontSize=11,
-            spaceAfter=4,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#333333'),
-            fontName='Times-Roman',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="PaperAuthor",
+                parent=self.styles["Normal"],
+                fontSize=11,
+                spaceAfter=4,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor("#333333"),
+                fontName="Times-Roman",
+            )
+        )
 
         # Abstract title
-        self.styles.add(ParagraphStyle(
-            name='AbstractTitle',
-            parent=self.styles['Normal'],
-            fontSize=10,
-            spaceBefore=12,
-            spaceAfter=4,
-            alignment=TA_CENTER,
-            fontName='Times-Bold',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="AbstractTitle",
+                parent=self.styles["Normal"],
+                fontSize=10,
+                spaceBefore=12,
+                spaceAfter=4,
+                alignment=TA_CENTER,
+                fontName="Times-Bold",
+            )
+        )
 
         # Abstract text - indented, italic
-        self.styles.add(ParagraphStyle(
-            name='Abstract',
-            parent=self.styles['Normal'],
-            fontSize=9,
-            alignment=TA_JUSTIFY,
-            leftIndent=1.5*cm,
-            rightIndent=1.5*cm,
-            spaceAfter=12,
-            leading=12,
-            fontName='Times-Italic',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="Abstract",
+                parent=self.styles["Normal"],
+                fontSize=9,
+                alignment=TA_JUSTIFY,
+                leftIndent=1.5 * cm,
+                rightIndent=1.5 * cm,
+                spaceAfter=12,
+                leading=12,
+                fontName="Times-Italic",
+            )
+        )
 
         # Section heading (numbered)
-        self.styles.add(ParagraphStyle(
-            name='SectionHeading',
-            parent=self.styles['Heading2'],
-            fontSize=11,
-            spaceBefore=14,
-            spaceAfter=6,
-            textColor=colors.black,
-            fontName='Times-Bold',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="SectionHeading",
+                parent=self.styles["Heading2"],
+                fontSize=11,
+                spaceBefore=14,
+                spaceAfter=6,
+                textColor=colors.black,
+                fontName="Times-Bold",
+            )
+        )
 
         # Subsection heading
-        self.styles.add(ParagraphStyle(
-            name='SubsectionHeading',
-            parent=self.styles['Heading3'],
-            fontSize=10,
-            spaceBefore=10,
-            spaceAfter=4,
-            textColor=colors.black,
-            fontName='Times-Bold',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="SubsectionHeading",
+                parent=self.styles["Heading3"],
+                fontSize=10,
+                spaceBefore=10,
+                spaceAfter=4,
+                textColor=colors.black,
+                fontName="Times-Bold",
+            )
+        )
 
         # Body text - justified, Times font
-        self.styles.add(ParagraphStyle(
-            name='AcademicBody',
-            parent=self.styles['Normal'],
-            fontSize=10,
-            alignment=TA_JUSTIFY,
-            spaceAfter=6,
-            leading=12,
-            fontName='Times-Roman',
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="AcademicBody",
+                parent=self.styles["Normal"],
+                fontSize=10,
+                alignment=TA_JUSTIFY,
+                spaceAfter=6,
+                leading=12,
+                fontName="Times-Roman",
+            )
+        )
 
         # Note/annotation style
-        self.styles.add(ParagraphStyle(
-            name='Note',
-            parent=self.styles['Normal'],
-            fontSize=9,
-            fontName='Times-Italic',
-            textColor=colors.HexColor('#444444'),
-            leftIndent=0.5*cm,
-            spaceAfter=8,
-            spaceBefore=4,
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="Note",
+                parent=self.styles["Normal"],
+                fontSize=9,
+                fontName="Times-Italic",
+                textColor=colors.HexColor("#444444"),
+                leftIndent=0.5 * cm,
+                spaceAfter=8,
+                spaceBefore=4,
+            )
+        )
 
         # Table caption
-        self.styles.add(ParagraphStyle(
-            name='TableCaption',
-            parent=self.styles['Normal'],
-            fontSize=9,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#333333'),
-            fontName='Times-Italic',
-            spaceBefore=4,
-            spaceAfter=10,
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="TableCaption",
+                parent=self.styles["Normal"],
+                fontSize=9,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor("#333333"),
+                fontName="Times-Italic",
+                spaceBefore=4,
+                spaceAfter=10,
+            )
+        )
 
         # Figure caption
-        self.styles.add(ParagraphStyle(
-            name='FigureCaption',
-            parent=self.styles['Normal'],
-            fontSize=9,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#333333'),
-            fontName='Times-Italic',
-            spaceBefore=4,
-            spaceAfter=8,
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="FigureCaption",
+                parent=self.styles["Normal"],
+                fontSize=9,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor("#333333"),
+                fontName="Times-Italic",
+                spaceBefore=4,
+                spaceAfter=8,
+            )
+        )
 
         # Reference style
-        self.styles.add(ParagraphStyle(
-            name='Reference',
-            parent=self.styles['Normal'],
-            fontSize=9,
-            fontName='Times-Roman',
-            leftIndent=0.5*cm,
-            firstLineIndent=-0.5*cm,
-            spaceAfter=3,
-        ))
+        self.styles.add(
+            ParagraphStyle(
+                name="Reference",
+                parent=self.styles["Normal"],
+                fontSize=9,
+                fontName="Times-Roman",
+                leftIndent=0.5 * cm,
+                firstLineIndent=-0.5 * cm,
+                spaceAfter=3,
+            )
+        )
 
     # ===========================================
     # DOCUMENT STRUCTURE
@@ -244,59 +294,65 @@ class PDFReportBuilder:
         self,
         title: str,
         subtitle: str,
-        date: Optional[datetime] = None,
+        date: datetime | None = None,
         author: str = "Inflationator Economic Simulator",
-        email: str = "simulation@inflationator.io"
+        email: str = "simulation@inflationator.io",
     ):
         """Add academic-style title section (not full page)"""
         date = date or datetime.now()
 
         # Title
-        self.elements.append(Paragraph(title, self.styles['PaperTitle']))
+        self.elements.append(Paragraph(title, self.styles["PaperTitle"]))
 
         # Subtitle
         if subtitle:
-            self.elements.append(Paragraph(subtitle, self.styles['PaperAuthor']))
+            self.elements.append(Paragraph(subtitle, self.styles["PaperAuthor"]))
 
         # Author and date
-        self.elements.append(Spacer(1, 0.3*cm))
-        self.elements.append(Paragraph(author, self.styles['PaperAuthor']))
-        self.elements.append(Paragraph(email, self.styles['PaperAuthor']))
-        self.elements.append(Paragraph(date.strftime("%B %d, %Y"), self.styles['PaperAuthor']))
+        self.elements.append(Spacer(1, 0.3 * cm))
+        self.elements.append(Paragraph(author, self.styles["PaperAuthor"]))
+        self.elements.append(Paragraph(email, self.styles["PaperAuthor"]))
+        self.elements.append(
+            Paragraph(date.strftime("%B %d, %Y"), self.styles["PaperAuthor"])
+        )
 
-        self.elements.append(Spacer(1, 0.5*cm))
+        self.elements.append(Spacer(1, 0.5 * cm))
 
     def add_abstract(self, text: str):
         """Add abstract section"""
-        self.elements.append(Paragraph("<b>Abstract.</b>", self.styles['AbstractTitle']))
-        self.elements.append(Paragraph(text, self.styles['Abstract']))
-        self.elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.gray, spaceAfter=10))
+        self.elements.append(
+            Paragraph("<b>Abstract.</b>", self.styles["AbstractTitle"])
+        )
+        self.elements.append(Paragraph(text, self.styles["Abstract"]))
+        self.elements.append(
+            HRFlowable(width="100%", thickness=0.5, color=colors.gray, spaceAfter=10)
+        )
 
-    def add_section(self, title: str, content: Optional[str] = None):
+    def add_section(self, title: str, content: str | None = None):
         """Add a numbered section"""
         self.section_counter += 1
         section_title = f"{self.section_counter}. {title}"
-        self.elements.append(Paragraph(section_title, self.styles['SectionHeading']))
+        self.elements.append(Paragraph(section_title, self.styles["SectionHeading"]))
         if content:
-            self.elements.append(Paragraph(content, self.styles['AcademicBody']))
+            self.elements.append(Paragraph(content, self.styles["AcademicBody"]))
 
-    def add_subsection(self, title: str, content: Optional[str] = None):
+    def add_subsection(self, title: str, content: str | None = None):
         """Add a subsection (not numbered)"""
-        self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
+        self.elements.append(Paragraph(title, self.styles["SubsectionHeading"]))
         if content:
-            self.elements.append(Paragraph(content, self.styles['AcademicBody']))
+            self.elements.append(Paragraph(content, self.styles["AcademicBody"]))
 
     def add_paragraph(self, text: str):
         """Add a body paragraph"""
-        self.elements.append(Paragraph(text, self.styles['AcademicBody']))
+        self.elements.append(Paragraph(text, self.styles["AcademicBody"]))
 
     def add_note(self, text: str):
         """Add an annotation/note"""
-        self.elements.append(Paragraph(text, self.styles['Note']))
+        self.elements.append(Paragraph(text, self.styles["Note"]))
 
     def add_spacer(self, height: float = 0.3):
         """Add vertical space (in cm)"""
-        self.elements.append(Spacer(1, height*cm))
+        self.elements.append(Spacer(1, height * cm))
 
     def add_page_break(self):
         """Add a page break"""
@@ -304,13 +360,15 @@ class PDFReportBuilder:
 
     def add_horizontal_line(self):
         """Add a thin horizontal line"""
-        self.elements.append(HRFlowable(
-            width="100%",
-            thickness=0.5,
-            color=colors.gray,
-            spaceBefore=6,
-            spaceAfter=6
-        ))
+        self.elements.append(
+            HRFlowable(
+                width="100%",
+                thickness=0.5,
+                color=colors.gray,
+                spaceBefore=6,
+                spaceAfter=6,
+            )
+        )
 
     # ===========================================
     # TABLES - COMPACT ACADEMIC STYLE
@@ -319,27 +377,36 @@ class PDFReportBuilder:
     def add_metrics_table(
         self,
         title: str,
-        metrics: Dict[str, Any],
-        caption: Optional[str] = None,
-        table_num: Optional[int] = None
+        metrics: dict[str, Any],
+        caption: str | None = None,
+        table_num: int | None = None,
     ):
         """Add a compact metrics table"""
 
         # Convert metrics to formatted table data
         data = []
         for key, value in metrics.items():
-            key_formatted = key.replace('_', ' ').title()
+            key_formatted = key.replace("_", " ").title()
 
             # Smart formatting based on key name
-            if any(x in key.lower() for x in ['damage', 'gdp', 'price', 'supply', 'money', 'cost']):
+            if any(
+                x in key.lower()
+                for x in ["damage", "gdp", "price", "supply", "money", "cost"]
+            ):
                 value_formatted = format_currency(value)
-            elif any(x in key.lower() for x in ['rate', 'inflation', 'unemployment', 'index']):
+            elif any(
+                x in key.lower() for x in ["rate", "inflation", "unemployment", "index"]
+            ):
                 if isinstance(value, (int, float)) and value < 1:
                     value_formatted = format_percent(value)
                 else:
                     value_formatted = format_number(value, 1)
             else:
-                value_formatted = str(value) if not isinstance(value, float) else format_number(value, 2)
+                value_formatted = (
+                    str(value)
+                    if not isinstance(value, float)
+                    else format_number(value, 2)
+                )
 
             data.append([key_formatted, value_formatted])
 
@@ -347,73 +414,85 @@ class PDFReportBuilder:
             return
 
         # Create compact table
-        table = Table(data, colWidths=[7*cm, 5*cm])
-        table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LINEBELOW', (0, 0), (-1, -2), 0.5, colors.HexColor('#cccccc')),
-            ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
-            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
-        ]))
+        table = Table(data, colWidths=[7 * cm, 5 * cm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, -1), "Times-Roman"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("ALIGN", (0, 0), (0, -1), "LEFT"),
+                    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LINEBELOW", (0, 0), (-1, -2), 0.5, colors.HexColor("#cccccc")),
+                    ("LINEBELOW", (0, -1), (-1, -1), 1, colors.black),
+                    ("LINEABOVE", (0, 0), (-1, 0), 1, colors.black),
+                ]
+            )
+        )
 
         self.elements.append(table)
 
         if caption:
             cap_text = f"Table {table_num}: {caption}" if table_num else caption
-            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
+            self.elements.append(Paragraph(cap_text, self.styles["TableCaption"]))
 
     def add_comparison_table(
         self,
-        headers: List[str],
-        rows: List[List[str]],
-        caption: Optional[str] = None,
-        table_num: Optional[int] = None
+        headers: list[str],
+        rows: list[list[str]],
+        caption: str | None = None,
+        table_num: int | None = None,
     ):
         """Add a compact comparison table with headers"""
 
-        data = [headers] + rows
+        data = [headers, *rows]
 
         # Calculate column widths
         num_cols = len(headers)
-        col_width = (16*cm) / num_cols
+        col_width = (16 * cm) / num_cols
 
         table = Table(data, colWidths=[col_width] * num_cols)
-        table.setStyle(TableStyle([
-            # Header styling
-            ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
-
-            # Body styling
-            ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    # Header styling
+                    ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 9),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+                    ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
+                    ("LINEABOVE", (0, 0), (-1, 0), 1, colors.black),
+                    # Body styling
+                    ("FONTNAME", (0, 1), (-1, -1), "Times-Roman"),
+                    ("FONTSIZE", (0, 1), (-1, -1), 9),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LINEBELOW", (0, -1), (-1, -1), 1, colors.black),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#fafafa")],
+                    ),
+                ]
+            )
+        )
 
         self.elements.append(table)
 
         if caption:
             cap_text = f"Table {table_num}: {caption}" if table_num else caption
-            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
+            self.elements.append(Paragraph(cap_text, self.styles["TableCaption"]))
 
     def add_ranking_table(
         self,
         title: str,
-        rankings: List[tuple],
-        caption: Optional[str] = None,
-        table_num: Optional[int] = None
+        rankings: list[tuple],
+        caption: str | None = None,
+        table_num: int | None = None,
     ):
         """Add a compact ranking table (rank, name, value)"""
 
@@ -421,30 +500,36 @@ class PDFReportBuilder:
         for i, (name, value) in enumerate(rankings, 1):
             data.append([str(i), name, value])
 
-        table = Table(data, colWidths=[1*cm, 4*cm, 4*cm])
-        table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
-            ('LINEBELOW', (0, -1), (-1, -1), 0.5, colors.black),
-        ]))
+        table = Table(data, colWidths=[1 * cm, 4 * cm, 4 * cm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+                    ("FONTNAME", (0, 1), (-1, -1), "Times-Roman"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("ALIGN", (1, 0), (1, -1), "LEFT"),
+                    ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
+                    ("LINEABOVE", (0, 0), (-1, 0), 1, colors.black),
+                    ("LINEBELOW", (0, -1), (-1, -1), 0.5, colors.black),
+                ]
+            )
+        )
 
         if title:
-            self.elements.append(Paragraph(f"<b>{title}</b>", self.styles['SubsectionHeading']))
+            self.elements.append(
+                Paragraph(f"<b>{title}</b>", self.styles["SubsectionHeading"])
+            )
 
         self.elements.append(table)
 
         if caption:
             cap_text = f"Table {table_num}: {caption}" if table_num else caption
-            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
+            self.elements.append(Paragraph(cap_text, self.styles["TableCaption"]))
 
     # ===========================================
     # CHARTS AND FIGURES
@@ -456,25 +541,27 @@ class PDFReportBuilder:
         caption: str,
         width: float = 14,
         height: float = 7,
-        figure_num: Optional[int] = None
+        figure_num: int | None = None,
     ):
         """Add a chart/figure with caption"""
         img_buffer = io.BytesIO(chart_bytes)
 
         # Convert cm to points
-        img = Image(img_buffer, width=width*cm, height=height*cm)
+        img = Image(img_buffer, width=width * cm, height=height * cm)
 
         # Center the image
-        self.elements.append(Spacer(1, 0.3*cm))
+        self.elements.append(Spacer(1, 0.3 * cm))
         self.elements.append(img)
 
-        cap_text = f"Figure {figure_num}: {caption}" if figure_num else f"Figure: {caption}"
-        self.elements.append(Paragraph(cap_text, self.styles['FigureCaption']))
+        cap_text = (
+            f"Figure {figure_num}: {caption}" if figure_num else f"Figure: {caption}"
+        )
+        self.elements.append(Paragraph(cap_text, self.styles["FigureCaption"]))
 
     def add_dashboard(
         self,
         dashboard_bytes: bytes,
-        caption: str = "Economic simulation dashboard showing key indicators"
+        caption: str = "Economic simulation dashboard showing key indicators",
     ):
         """Add the full simulation dashboard"""
         self.add_chart(dashboard_bytes, caption, width=16, height=10)
@@ -483,15 +570,15 @@ class PDFReportBuilder:
     # LISTS
     # ===========================================
 
-    def add_bullet_list(self, items: List[str]):
+    def add_bullet_list(self, items: list[str]):
         """Add a simple bullet list"""
         for item in items:
-            self.elements.append(Paragraph(f"• {item}", self.styles['AcademicBody']))
+            self.elements.append(Paragraph(f"• {item}", self.styles["AcademicBody"]))
 
-    def add_numbered_list(self, items: List[str]):
+    def add_numbered_list(self, items: list[str]):
         """Add a numbered list"""
         for i, item in enumerate(items, 1):
-            self.elements.append(Paragraph(f"[{i}] {item}", self.styles['Reference']))
+            self.elements.append(Paragraph(f"[{i}] {item}", self.styles["Reference"]))
 
     # ===========================================
     # SPECIALIZED SECTIONS
@@ -530,7 +617,7 @@ class PDFReportBuilder:
             "<b>Austrian Business Cycle Theory:</b> Credit expansion artificially lowers interest rates below the natural rate, leading to malinvestment in higher-order capital goods.",
             "<b>Economic Calculation:</b> Prices serve as essential signals for resource allocation; intervention distorts these signals.",
             "<b>Time Preference:</b> The ratio at which individuals value present goods over future goods determines the natural interest rate.",
-            "<b>Spontaneous Order:</b> Complex economic coordination emerges from individual actions without central planning."
+            "<b>Spontaneous Order:</b> Complex economic coordination emerges from individual actions without central planning.",
         ]
 
         for point in points:
@@ -580,10 +667,12 @@ class PDFReportBuilder:
         self.add_note(
             '"The government can, for a time, simply print money to finance its deficits. But the process '
             'of money printing leads to rising prices and distorts production." - Murray Rothbard, '
-            'What Has Government Done to Our Money? (1963)'
+            "What Has Government Done to Our Money? (1963)"
         )
 
-    def add_hoppe_section(self, regime_type: str, freedom_index: float, gov_damage: float):
+    def add_hoppe_section(
+        self, regime_type: str, freedom_index: float, gov_damage: float
+    ):
         """Add section on Hoppe's analysis of democracy and time preference"""
         self.add_section("Regime Analysis (Hoppe)")
 
@@ -596,26 +685,26 @@ class PDFReportBuilder:
 
         self.add_subsection("Time Preference and Regime Type")
         regime_analysis = {
-            'totalitarian': "Totalitarian regimes exhibit extremely high time preference - rulers extract "
-                           "maximum value in the short term with no regard for long-term capital preservation. "
-                           "This explains the economic devastation in communist and fascist states.",
-            'democracy_socialist': "Democratic socialist regimes combine democratic short-termism with "
-                                  "socialist economic intervention. Politicians maximize vote-buying today "
-                                  "at the expense of future generations through debt and monetary expansion.",
-            'democracy_liberal': "Liberal democracies temper intervention with some respect for property "
-                                "rights, but still suffer from electoral incentives that favor present "
-                                "consumption over capital accumulation.",
-            'monarchy': "Monarchies, as Hoppe notes, tend toward lower time preference because the king "
-                       "'owns' the country and has incentive to preserve its capital value for heirs. "
-                       "This doesn't justify monarchy, but explains its relative economic stability.",
-            'minarchy': "Minimal states restrict intervention to essential services, allowing most "
-                       "economic activity to be governed by voluntary exchange. Time preference is "
-                       "determined by market rather than political factors.",
-            'ancap': "Anarcho-capitalism represents the theoretical optimum - pure private property order "
-                    "with no systematic intervention. Time preference is entirely market-determined."
+            "totalitarian": "Totalitarian regimes exhibit extremely high time preference - rulers extract "
+            "maximum value in the short term with no regard for long-term capital preservation. "
+            "This explains the economic devastation in communist and fascist states.",
+            "democracy_socialist": "Democratic socialist regimes combine democratic short-termism with "
+            "socialist economic intervention. Politicians maximize vote-buying today "
+            "at the expense of future generations through debt and monetary expansion.",
+            "democracy_liberal": "Liberal democracies temper intervention with some respect for property "
+            "rights, but still suffer from electoral incentives that favor present "
+            "consumption over capital accumulation.",
+            "monarchy": "Monarchies, as Hoppe notes, tend toward lower time preference because the king "
+            "'owns' the country and has incentive to preserve its capital value for heirs. "
+            "This doesn't justify monarchy, but explains its relative economic stability.",
+            "minarchy": "Minimal states restrict intervention to essential services, allowing most "
+            "economic activity to be governed by voluntary exchange. Time preference is "
+            "determined by market rather than political factors.",
+            "ancap": "Anarcho-capitalism represents the theoretical optimum - pure private property order "
+            "with no systematic intervention. Time preference is entirely market-determined.",
         }
 
-        regime_key = regime_type.lower().replace(' ', '_')
+        regime_key = regime_type.lower().replace(" ", "_")
         if regime_key in regime_analysis:
             self.add_paragraph(regime_analysis[regime_key])
         else:
@@ -627,7 +716,7 @@ class PDFReportBuilder:
         self.add_note(
             '"Under democratic conditions, the government apparatus tends to grow relative to the economy... '
             'The democratic system inexorably tends toward fiscal irresponsibility and exploitation." '
-            '- Hans-Hermann Hoppe, Democracy: The God That Failed (2001)'
+            "- Hans-Hermann Hoppe, Democracy: The God That Failed (2001)"
         )
 
     def add_mises_section(self, business_cycle_phase: str, rate_distortion: float = 0):
@@ -642,18 +731,18 @@ class PDFReportBuilder:
         )
 
         phase_analysis = {
-            'boom': "The economy is currently in the BOOM phase. Credit expansion has artificially lowered "
-                   "interest rates, encouraging investment in long-term capital projects. These projects "
-                   "appear profitable at current rates but will prove unprofitable when rates normalize.",
-            'crisis': "The economy is experiencing CRISIS. The boom's malinvestments are being revealed as "
-                     "unprofitable. Resources must be reallocated from failed projects to viable ones. "
-                     "This painful process is necessary to correct previous distortions.",
-            'recession': "The RECESSION phase represents the economy purging malinvestments. Unemployment "
-                        "rises as resources shift from failed boom-era projects. Government attempts to "
-                        "'stimulate' the economy will only delay necessary adjustments.",
-            'recovery': "The economy is in RECOVERY. Resources are being reallocated toward sustainable "
-                       "production. If the central bank resists the temptation to re-inflate, genuine "
-                       "prosperity can emerge based on real savings rather than credit illusion."
+            "boom": "The economy is currently in the BOOM phase. Credit expansion has artificially lowered "
+            "interest rates, encouraging investment in long-term capital projects. These projects "
+            "appear profitable at current rates but will prove unprofitable when rates normalize.",
+            "crisis": "The economy is experiencing CRISIS. The boom's malinvestments are being revealed as "
+            "unprofitable. Resources must be reallocated from failed projects to viable ones. "
+            "This painful process is necessary to correct previous distortions.",
+            "recession": "The RECESSION phase represents the economy purging malinvestments. Unemployment "
+            "rises as resources shift from failed boom-era projects. Government attempts to "
+            "'stimulate' the economy will only delay necessary adjustments.",
+            "recovery": "The economy is in RECOVERY. Resources are being reallocated toward sustainable "
+            "production. If the central bank resists the temptation to re-inflate, genuine "
+            "prosperity can emerge based on real savings rather than credit illusion.",
         }
 
         phase_key = business_cycle_phase.lower()
@@ -668,12 +757,14 @@ class PDFReportBuilder:
 
         self.add_note(
             '"There is no means of avoiding the final collapse of a boom brought about by credit expansion. '
-            'The alternative is only whether the crisis should come sooner as the result of voluntary abandonment '
+            "The alternative is only whether the crisis should come sooner as the result of voluntary abandonment "
             'of further credit expansion, or later as a final and total catastrophe of the currency system involved." '
-            '- Ludwig von Mises, Human Action (1949)'
+            "- Ludwig von Mises, Human Action (1949)"
         )
 
-    def add_bitcoin_analysis_section(self, btc_price: float, btc_change: float, dollar_debasement: float = 0):
+    def add_bitcoin_analysis_section(
+        self, btc_price: float, btc_change: float, dollar_debasement: float = 0
+    ):
         """Add section analyzing Bitcoin as sound money"""
         self.add_section("Bitcoin as Sound Money")
 
@@ -708,8 +799,8 @@ class PDFReportBuilder:
         self,
         freedom_index: float,
         total_damage: Any,
-        best_country: Optional[str] = None,
-        worst_country: Optional[str] = None
+        best_country: str | None = None,
+        worst_country: str | None = None,
     ):
         """Add conclusions section"""
         self.add_section("Conclusions")

@@ -12,21 +12,19 @@ Austrian Theory:
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Dict, Any, Optional, List
-from datetime import datetime
 import random
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
-from .collectors.bitcoin import BitcoinCollector, get_bitcoin_price
-from .collectors.commodities import CommoditiesCollector, get_commodity_prices
-from .collectors.market_sentiment import (
-    MarketSentimentCollector,
-    get_market_indices,
-    get_market_fear_level,
-)
+from .collectors.bitcoin import BitcoinCollector
+from .collectors.commodities import CommoditiesCollector
 from .collectors.country_collector import CountryDataCollector
 from .collectors.forex import ForexCollector
+from .collectors.market_sentiment import (
+    MarketSentimentCollector,
+)
 
 
 @dataclass
@@ -65,7 +63,7 @@ class EconomicConditions:
     # Country-specific interest rate
     local_interest_rate: float = 0.05
     treasury_10y: float = 4.5  # US reference
-    treasury_2y: float = 4.8   # US reference
+    treasury_2y: float = 4.8  # US reference
     yield_curve_inverted: bool = False
 
     # Sentiment
@@ -130,7 +128,7 @@ class RealWorldConditionsCollector:
 
     # Estimated local inflation rates (Austrian estimate, not CPI)
     LOCAL_INFLATION_ESTIMATES = {
-        "USA": 8.0,   # Real inflation higher than CPI claims
+        "USA": 8.0,  # Real inflation higher than CPI claims
         "CAN": 6.0,
         "MEX": 12.0,
         "BRA": 15.0,
@@ -140,10 +138,10 @@ class RealWorldConditionsCollector:
         "FRA": 5.5,
         "SWE": 6.0,
         "NOR": 4.0,
-        "CHE": 2.0,   # Low intervention = low inflation
+        "CHE": 2.0,  # Low intervention = low inflation
         "LIE": 2.0,
         "CHN": 8.0,
-        "JPN": 3.0,   # Deflation history
+        "JPN": 3.0,  # Deflation history
         "IND": 10.0,
         "IDN": 8.0,
         "ARE": 4.0,
@@ -154,51 +152,51 @@ class RealWorldConditionsCollector:
 
     # Historical average GDP growth rates (10-year average, real terms)
     HISTORICAL_GDP_GROWTH = {
-        "USA": 2.3,    # Slow but steady
+        "USA": 2.3,  # Slow but steady
         "CAN": 1.8,
-        "MEX": 1.5,    # Stagnant
-        "BRA": 0.5,    # Lost decade
-        "ARG": -1.0,   # Negative growth (intervention damage)
+        "MEX": 1.5,  # Stagnant
+        "BRA": 0.5,  # Lost decade
+        "ARG": -1.0,  # Negative growth (intervention damage)
         "GBR": 1.5,
         "DEU": 1.2,
         "FRA": 1.0,
         "SWE": 2.0,
         "NOR": 1.5,
-        "CHE": 1.8,    # Stable growth despite low intervention
-        "LIE": 2.5,    # High growth (low intervention)
-        "CHN": 5.5,    # Slowing from previous highs
-        "JPN": 0.8,    # Stagnation
-        "IND": 6.0,    # Strong growth
+        "CHE": 1.8,  # Stable growth despite low intervention
+        "LIE": 2.5,  # High growth (low intervention)
+        "CHN": 5.5,  # Slowing from previous highs
+        "JPN": 0.8,  # Stagnation
+        "IND": 6.0,  # Strong growth
         "IDN": 5.0,
-        "ARE": 3.5,    # Oil-driven
-        "SAU": 2.0,    # Oil-dependent
-        "RUS": 1.0,    # Sanctions impact
-        "TUR": 3.0,    # Volatile but growing
+        "ARE": 3.5,  # Oil-driven
+        "SAU": 2.0,  # Oil-dependent
+        "RUS": 1.0,  # Sanctions impact
+        "TUR": 3.0,  # Volatile but growing
     }
 
     # Historical unemployment rates (baseline, not government manipulated)
     # Austrian estimate: real unemployment is higher than official stats
     HISTORICAL_UNEMPLOYMENT = {
-        "USA": 7.0,    # Real: higher than official 4%
+        "USA": 7.0,  # Real: higher than official 4%
         "CAN": 7.5,
         "MEX": 8.0,
-        "BRA": 12.0,   # High structural unemployment
-        "ARG": 15.0,   # Very high
+        "BRA": 12.0,  # High structural unemployment
+        "ARG": 15.0,  # Very high
         "GBR": 6.0,
         "DEU": 5.5,
-        "FRA": 9.0,    # High due to regulations
+        "FRA": 9.0,  # High due to regulations
         "SWE": 8.0,
-        "NOR": 4.5,    # Low (oil wealth)
-        "CHE": 3.5,    # Very low (minarchy works)
-        "LIE": 2.0,    # Lowest (monarchy + low intervention)
-        "CHN": 8.0,    # Hidden unemployment
-        "JPN": 4.0,    # Low but underemployment
-        "IND": 10.0,   # High informal economy
+        "NOR": 4.5,  # Low (oil wealth)
+        "CHE": 3.5,  # Very low (minarchy works)
+        "LIE": 2.0,  # Lowest (monarchy + low intervention)
+        "CHN": 8.0,  # Hidden unemployment
+        "JPN": 4.0,  # Low but underemployment
+        "IND": 10.0,  # High informal economy
         "IDN": 7.0,
-        "ARE": 3.0,    # Low (oil + migrant workers)
-        "SAU": 12.0,   # High among nationals
+        "ARE": 3.0,  # Low (oil + migrant workers)
+        "SAU": 12.0,  # High among nationals
         "RUS": 8.0,
-        "TUR": 12.0,   # High and volatile
+        "TUR": 12.0,  # High and volatile
     }
 
     def __init__(self, country: str = "USA"):
@@ -225,7 +223,9 @@ class RealWorldConditionsCollector:
         # Fetch country-specific data first
         try:
             country_data = self.country_collector.get_country_conditions()
-            conditions.stock_index_name = self.STOCK_INDEX_NAMES.get(self.country, "Stock Index")
+            conditions.stock_index_name = self.STOCK_INDEX_NAMES.get(
+                self.country, "Stock Index"
+            )
             conditions.stock_index_value = float(country_data.stock_index_value)
             conditions.stock_index_change_pct = country_data.stock_index_change_pct
             conditions.fx_rate_vs_usd = float(country_data.fx_rate_vs_usd)
@@ -253,9 +253,8 @@ class RealWorldConditionsCollector:
             btc_market_task = self.btc_collector.get_market_data()
             crypto_fg_task = self.sentiment_collector.get_crypto_fear_greed()
 
-            btc_price, btc_market, crypto_fg = await asyncio.gather(
-                btc_task, btc_market_task, crypto_fg_task,
-                return_exceptions=True
+            btc_price, _btc_market, crypto_fg = await asyncio.gather(
+                btc_task, btc_market_task, crypto_fg_task, return_exceptions=True
             )
 
             # Process BTC data
@@ -338,8 +337,12 @@ class RealWorldConditionsCollector:
         gold_baseline = Decimal("1300")  # Gold ~5 years ago
         btc_baseline = Decimal("10000")  # BTC ~5 years ago
 
-        gold_inflation = float((conditions.gold_price_usd - gold_baseline) / gold_baseline) * 100 / 5
-        btc_inflation = float((conditions.btc_price_usd - btc_baseline) / btc_baseline) * 100 / 5
+        gold_inflation = (
+            float((conditions.gold_price_usd - gold_baseline) / gold_baseline) * 100 / 5
+        )
+        btc_inflation = (
+            float((conditions.btc_price_usd - btc_baseline) / btc_baseline) * 100 / 5
+        )
 
         # Weighted average (gold more stable, btc more volatile)
         real_inflation = gold_inflation * 0.7 + btc_inflation * 0.1
@@ -358,7 +361,7 @@ class RealWorldConditionsCollector:
         btc_10y_ago = Decimal("500")
 
         gold_debasement = float((conditions.gold_price_usd / gold_10y_ago - 1) * 100)
-        btc_debasement = float((conditions.btc_price_usd / btc_10y_ago - 1) * 100)
+        float((conditions.btc_price_usd / btc_10y_ago - 1) * 100)
 
         # Use more conservative gold measure
         return gold_debasement
@@ -453,7 +456,7 @@ class RealWorldConditionsCollector:
             return 0.2
         return 0.3
 
-    def to_simulation_config(self, conditions: EconomicConditions) -> Dict[str, Any]:
+    def to_simulation_config(self, conditions: EconomicConditions) -> dict[str, Any]:
         """
         Convert economic conditions to simulation initial state.
 
@@ -467,14 +470,12 @@ class RealWorldConditionsCollector:
                 "precious_metals": float(conditions.gold_price_usd),
                 "energy": float(conditions.oil_price_usd),
             },
-
             # Central bank parameters
             "central_bank": {
                 "policy_rate": conditions.treasury_2y / 100,  # Convert to decimal
                 "inflation_target": 0.02,
                 "qe_active": conditions.monetary_expansion_signal == "loose",
             },
-
             # Agent behavior modifiers
             "agent_modifiers": {
                 "fear_level": conditions.market_fear_level / 100,
@@ -482,20 +483,17 @@ class RealWorldConditionsCollector:
                 "risk_tolerance_shift": self._calculate_risk_shift(conditions),
                 "inflation_expectations": conditions.inflation_estimate / 100,
             },
-
             # Market conditions
             "market_conditions": {
                 "volatility_multiplier": conditions.volatility_ratio,
                 "recession_probability": conditions.recession_probability,
                 "dollar_strength": conditions.dxy_value / 100,
             },
-
             # Geopolitical
             "geopolitics": {
                 "risk_level": conditions.geopolitical_risk_level,
                 "trade_tensions": conditions.trade_tensions,
             },
-
             # Metadata
             "data_timestamp": conditions.fetched_at.isoformat(),
             "country": self.country,
@@ -559,7 +557,7 @@ class RealWorldInitializer:
         self.conditions = conditions
         self.country = country
 
-    def get_initial_wealth_distribution(self, num_agents: int) -> List[Decimal]:
+    def get_initial_wealth_distribution(self, num_agents: int) -> list[Decimal]:
         """
         Generate realistic wealth distribution based on current conditions.
 
@@ -581,7 +579,7 @@ class RealWorldInitializer:
 
         return wealth_list
 
-    def get_initial_time_preferences(self, num_agents: int) -> List[float]:
+    def get_initial_time_preferences(self, num_agents: int) -> list[float]:
         """
         Generate realistic time preference distribution.
 
@@ -629,7 +627,7 @@ class RealWorldInitializer:
 
         return max(0.70, min(0.95, base_rate))
 
-    def get_initial_consumer_prices(self) -> Dict[str, Decimal]:
+    def get_initial_consumer_prices(self) -> dict[str, Decimal]:
         """
         Get realistic initial prices for consumer goods.
 
@@ -675,7 +673,7 @@ def get_real_world_conditions(country: str = "USA") -> EconomicConditions:
     return asyncio.run(collector.fetch_all_conditions())
 
 
-def get_simulation_initial_state(country: str = "USA") -> Dict[str, Any]:
+def get_simulation_initial_state(country: str = "USA") -> dict[str, Any]:
     """
     Get initial state for simulation based on real-world conditions.
     """
@@ -708,7 +706,9 @@ def print_conditions_summary(conditions: EconomicConditions):
     print("-" * 50)
     print(f"  {conditions.stock_index_name}:  {conditions.stock_index_value:,.0f}")
     print(f"  30-Day Change:  {conditions.stock_index_change_pct:+.1f}%")
-    print(f"  Market Trend:   {'BULLISH' if conditions.local_market_bullish else 'BEARISH'}")
+    print(
+        f"  Market Trend:   {'BULLISH' if conditions.local_market_bullish else 'BEARISH'}"
+    )
     print(f"  Volatility:     {conditions.local_volatility:.1f}%")
 
     # Show currency info for non-USD countries
@@ -729,18 +729,26 @@ def print_conditions_summary(conditions: EconomicConditions):
     print("-" * 50)
     print(f"  {country} Rate:     {conditions.local_interest_rate:.2%}")
     print(f"  US 10Y Treasury:  {conditions.treasury_10y:.2f}%")
-    print(f"  Yield Curve:      {'INVERTED' if conditions.yield_curve_inverted else 'Normal'}")
+    print(
+        f"  Yield Curve:      {'INVERTED' if conditions.yield_curve_inverted else 'Normal'}"
+    )
 
     print(f"\n{'SENTIMENT':^50}")
     print("-" * 50)
-    print(f"  Market Fear Level:    {conditions.market_fear_level}/100 ({conditions.market_sentiment})")
+    print(
+        f"  Market Fear Level:    {conditions.market_fear_level}/100 ({conditions.market_sentiment})"
+    )
     print(f"  Crypto Fear & Greed:  {conditions.crypto_fear_greed}/100")
 
     print(f"\n{'INFLATION ESTIMATES':^50}")
     print("-" * 50)
-    print(f"  {country} Real Inflation: {conditions.local_inflation_estimate:.1f}% (Austrian estimate)")
+    print(
+        f"  {country} Real Inflation: {conditions.local_inflation_estimate:.1f}% (Austrian estimate)"
+    )
     print(f"  Global (commodity):     {conditions.inflation_estimate:.1f}%")
-    print(f"  Dollar Debasement:      {conditions.dollar_debasement_10y:.1f}% (10 years)")
+    print(
+        f"  Dollar Debasement:      {conditions.dollar_debasement_10y:.1f}% (10 years)"
+    )
 
     print(f"\n{'MACRO INDICATORS':^50}")
     print("-" * 50)

@@ -9,9 +9,10 @@ Austrian Theory Relevance:
 - Strong currencies = less intervention
 """
 
-from decimal import Decimal
-from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
 import yfinance as yf
 
 
@@ -26,32 +27,28 @@ class ForexCollector:
     # Currency tickers for all 20 countries (vs USD)
     CURRENCY_TICKERS = {
         # Americas
-        "USD": None,           # Base currency
-        "CAD": "CADUSD=X",     # Canadian Dollar
-        "MXN": "MXNUSD=X",     # Mexican Peso
-        "BRL": "BRLUSD=X",     # Brazilian Real
-        "ARS": "ARSUSD=X",     # Argentine Peso
-
+        "USD": None,  # Base currency
+        "CAD": "CADUSD=X",  # Canadian Dollar
+        "MXN": "MXNUSD=X",  # Mexican Peso
+        "BRL": "BRLUSD=X",  # Brazilian Real
+        "ARS": "ARSUSD=X",  # Argentine Peso
         # Europe
-        "GBP": "GBPUSD=X",     # British Pound
-        "EUR": "EURUSD=X",     # Euro (DEU, FRA)
-        "SEK": "SEKUSD=X",     # Swedish Krona
-        "NOK": "NOKUSD=X",     # Norwegian Krone
-        "CHF": "CHFUSD=X",     # Swiss Franc (CHE, LIE)
-
+        "GBP": "GBPUSD=X",  # British Pound
+        "EUR": "EURUSD=X",  # Euro (DEU, FRA)
+        "SEK": "SEKUSD=X",  # Swedish Krona
+        "NOK": "NOKUSD=X",  # Norwegian Krone
+        "CHF": "CHFUSD=X",  # Swiss Franc (CHE, LIE)
         # Asia
-        "CNY": "CNYUSD=X",     # Chinese Yuan
-        "JPY": "JPYUSD=X",     # Japanese Yen
-        "INR": "INRUSD=X",     # Indian Rupee
-        "IDR": "IDRUSD=X",     # Indonesian Rupiah
-
+        "CNY": "CNYUSD=X",  # Chinese Yuan
+        "JPY": "JPYUSD=X",  # Japanese Yen
+        "INR": "INRUSD=X",  # Indian Rupee
+        "IDR": "IDRUSD=X",  # Indonesian Rupiah
         # Middle East
-        "AED": "AEDUSD=X",     # UAE Dirham
-        "SAR": "SARUSD=X",     # Saudi Riyal
-
+        "AED": "AEDUSD=X",  # UAE Dirham
+        "SAR": "SARUSD=X",  # Saudi Riyal
         # Eurasia
-        "RUB": "RUBUSD=X",     # Russian Ruble
-        "TRY": "TRYUSD=X",     # Turkish Lira
+        "RUB": "RUBUSD=X",  # Russian Ruble
+        "TRY": "TRYUSD=X",  # Turkish Lira
     }
 
     # Country to currency mapping
@@ -79,8 +76,8 @@ class ForexCollector:
     }
 
     def __init__(self):
-        self._cache: Dict[str, Any] = {}
-        self._cache_time: Optional[datetime] = None
+        self._cache: dict[str, Any] = {}
+        self._cache_time: datetime | None = None
         self._cache_ttl = timedelta(minutes=15)
 
     def _is_cache_valid(self) -> bool:
@@ -132,7 +129,7 @@ class ForexCollector:
         currency = self.COUNTRY_CURRENCIES.get(country_code, "USD")
         return self.get_rate(currency)
 
-    def get_all_rates(self) -> Dict[str, Decimal]:
+    def get_all_rates(self) -> dict[str, Decimal]:
         """
         Get current exchange rates for all currencies.
 
@@ -158,7 +155,7 @@ class ForexCollector:
             "CAD": Decimal("0.74"),
             "MXN": Decimal("0.058"),
             "BRL": Decimal("0.20"),
-            "ARS": Decimal("0.0011"),   # Very weak (inflation)
+            "ARS": Decimal("0.0011"),  # Very weak (inflation)
             "GBP": Decimal("1.27"),
             "EUR": Decimal("1.08"),
             "SEK": Decimal("0.095"),
@@ -170,16 +167,14 @@ class ForexCollector:
             "IDR": Decimal("0.000063"),
             "AED": Decimal("0.27"),
             "SAR": Decimal("0.27"),
-            "RUB": Decimal("0.011"),    # Weakened by sanctions
-            "TRY": Decimal("0.031"),    # Very weak (Erdogan policy)
+            "RUB": Decimal("0.011"),  # Weakened by sanctions
+            "TRY": Decimal("0.031"),  # Very weak (Erdogan policy)
         }
         return mock_rates.get(currency, Decimal("1.0"))
 
     def get_rate_with_history(
-        self,
-        currency: str,
-        period: str = "1mo"
-    ) -> Dict[str, Any]:
+        self, currency: str, period: str = "1mo"
+    ) -> dict[str, Any]:
         """
         Get exchange rate with historical data.
 
@@ -240,7 +235,7 @@ class ForexCollector:
             "low": rate,
         }
 
-    def calculate_currency_strength(self) -> Dict[str, float]:
+    def calculate_currency_strength(self) -> dict[str, float]:
         """
         Calculate relative currency strength.
 
@@ -254,7 +249,7 @@ class ForexCollector:
 
         # Get 30-day changes for each currency
         strength = {}
-        for currency in rates.keys():
+        for currency in rates:
             if currency == "USD":
                 strength[currency] = 0.0  # Baseline
                 continue
@@ -265,7 +260,7 @@ class ForexCollector:
 
         return strength
 
-    def get_major_pairs(self) -> Dict[str, Dict[str, Any]]:
+    def get_major_pairs(self) -> dict[str, dict[str, Any]]:
         """
         Get major currency pairs data.
 
@@ -287,7 +282,7 @@ class ForexCollector:
         }
         return major_pairs
 
-    def _invert_rate(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _invert_rate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Invert rate data (for USD/XXX quotes)"""
         if data["rate"] > 0:
             data["rate"] = Decimal("1") / data["rate"]
@@ -298,10 +293,7 @@ class ForexCollector:
             data["low"] = Decimal("1") / old_high if old_high > 0 else data["rate"]
         return data
 
-    def calculate_dollar_debasement(
-        self,
-        years: int = 10
-    ) -> Dict[str, float]:
+    def calculate_dollar_debasement(self, years: int = 10) -> dict[str, float]:
         """
         Calculate USD debasement against various currencies.
 
@@ -312,14 +304,14 @@ class ForexCollector:
         """
         # Historical rates (approximate, N years ago)
         historical_rates = {
-            "CHF": Decimal("0.95"),   # Was ~0.95, now ~1.12
-            "EUR": Decimal("1.30"),   # Was ~1.30, now ~1.08
-            "GBP": Decimal("1.55"),   # Was ~1.55, now ~1.27
-            "JPY": Decimal("0.0095"), # Was ~0.0095, now ~0.0067
-            "CNY": Decimal("0.16"),   # Was ~0.16, now ~0.14
-            "BRL": Decimal("0.40"),   # Was ~0.40, now ~0.20
-            "ARS": Decimal("0.25"),   # Was ~0.25, now ~0.001
-            "TRY": Decimal("0.50"),   # Was ~0.50, now ~0.03
+            "CHF": Decimal("0.95"),  # Was ~0.95, now ~1.12
+            "EUR": Decimal("1.30"),  # Was ~1.30, now ~1.08
+            "GBP": Decimal("1.55"),  # Was ~1.55, now ~1.27
+            "JPY": Decimal("0.0095"),  # Was ~0.0095, now ~0.0067
+            "CNY": Decimal("0.16"),  # Was ~0.16, now ~0.14
+            "BRL": Decimal("0.40"),  # Was ~0.40, now ~0.20
+            "ARS": Decimal("0.25"),  # Was ~0.25, now ~0.001
+            "TRY": Decimal("0.50"),  # Was ~0.50, now ~0.03
         }
 
         current_rates = self.get_all_rates()
@@ -347,7 +339,7 @@ def get_country_forex_rate(country_code: str) -> Decimal:
     return collector.get_country_rate(country_code)
 
 
-def get_all_forex_rates() -> Dict[str, Decimal]:
+def get_all_forex_rates() -> dict[str, Decimal]:
     """Get all exchange rates"""
     collector = ForexCollector()
     return collector.get_all_rates()

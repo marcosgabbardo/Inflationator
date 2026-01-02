@@ -8,16 +8,15 @@ Based on Austrian Economics:
 - Labor is a market like any other
 """
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Dict, List, Optional, Tuple, Set
-import random
 from collections import defaultdict
+from dataclasses import dataclass
+from decimal import Decimal
 
 
 @dataclass
 class JobPosting:
     """A job posting from a company"""
+
     company_id: str
     wage: Decimal
     required_skill: float
@@ -28,20 +27,22 @@ class JobPosting:
 @dataclass
 class JobApplication:
     """A job application from a person"""
+
     person_id: str
     skill_level: float
     reservation_wage: Decimal
-    current_employer: Optional[str] = None
+    current_employer: str | None = None
 
 
 @dataclass
 class EmploymentRecord:
     """Record of employment relationship"""
+
     person_id: str
     company_id: str
     wage: Decimal
     start_tick: int
-    end_tick: Optional[int] = None
+    end_tick: int | None = None
 
 
 class LaborMarket:
@@ -59,13 +60,15 @@ class LaborMarket:
         self.country = country
 
         # Current state
-        self.job_postings: List[JobPosting] = []
-        self.job_applications: List[JobApplication] = []
+        self.job_postings: list[JobPosting] = []
+        self.job_applications: list[JobApplication] = []
 
         # Employment records
-        self.employment: Dict[str, str] = {}  # person_id -> company_id
-        self.company_employees: Dict[str, Set[str]] = defaultdict(set)  # company_id -> set of person_ids
-        self.wages: Dict[str, Decimal] = {}  # person_id -> wage
+        self.employment: dict[str, str] = {}  # person_id -> company_id
+        self.company_employees: dict[str, set[str]] = defaultdict(
+            set
+        )  # company_id -> set of person_ids
+        self.wages: dict[str, Decimal] = {}  # person_id -> wage
 
         # Market statistics
         self.market_wage: Decimal = Decimal("1000")  # Weekly wage
@@ -74,8 +77,8 @@ class LaborMarket:
         self.total_labor_force: int = 0
 
         # History
-        self.wage_history: List[Decimal] = []
-        self.unemployment_history: List[float] = []
+        self.wage_history: list[Decimal] = []
+        self.unemployment_history: list[float] = []
 
         # Government distortions
         self.minimum_wage: Decimal = Decimal("0")  # 0 = no minimum wage (free market)
@@ -109,7 +112,7 @@ class LaborMarket:
         wage: Decimal,
         required_skill: float,
         positions: int,
-        sector: str
+        sector: str,
     ):
         """Company posts a job opening"""
         # Apply minimum wage if set
@@ -129,7 +132,7 @@ class LaborMarket:
         person_id: str,
         skill_level: float,
         reservation_wage: Decimal,
-        current_employer: Optional[str] = None
+        current_employer: str | None = None,
     ):
         """Person applies for jobs"""
         application = JobApplication(
@@ -144,7 +147,7 @@ class LaborMarket:
     # MARKET CLEARING
     # ===========================================
 
-    def clear_market(self, tick: int) -> Dict[str, any]:
+    def clear_market(self, tick: int) -> dict[str, any]:
         """
         Clear the labor market - match workers with jobs.
 
@@ -155,21 +158,15 @@ class LaborMarket:
         unmatched_workers = []
 
         # Sort job postings by wage (descending) - best jobs first
-        sorted_postings = sorted(
-            self.job_postings,
-            key=lambda p: p.wage,
-            reverse=True
-        )
+        sorted_postings = sorted(self.job_postings, key=lambda p: p.wage, reverse=True)
 
         # Sort applications by skill (descending) - best workers first
         sorted_applications = sorted(
-            self.job_applications,
-            key=lambda a: a.skill_level,
-            reverse=True
+            self.job_applications, key=lambda a: a.skill_level, reverse=True
         )
 
         # Track which applications have been matched
-        matched_persons: Set[str] = set()
+        matched_persons: set[str] = set()
 
         # Match workers to jobs
         for posting in sorted_postings:
@@ -183,27 +180,32 @@ class LaborMarket:
                     continue
 
                 # Check if worker qualifies and accepts wage
-                if (app.skill_level >= posting.required_skill and
-                    posting.wage >= app.reservation_wage):
-
+                if (
+                    app.skill_level >= posting.required_skill
+                    and posting.wage >= app.reservation_wage
+                ):
                     # Calculate effective wage after taxes and regulation costs
                     effective_wage = self._calculate_effective_wage(posting.wage)
 
                     # Match!
-                    matches.append({
-                        "person_id": app.person_id,
-                        "company_id": posting.company_id,
-                        "wage": effective_wage,
-                        "gross_wage": posting.wage,
-                    })
+                    matches.append(
+                        {
+                            "person_id": app.person_id,
+                            "company_id": posting.company_id,
+                            "wage": effective_wage,
+                            "gross_wage": posting.wage,
+                        }
+                    )
                     matched_persons.add(app.person_id)
                     positions_filled += 1
 
             if positions_filled < posting.positions:
-                unmatched_jobs.append({
-                    "company_id": posting.company_id,
-                    "unfilled": posting.positions - positions_filled,
-                })
+                unmatched_jobs.append(
+                    {
+                        "company_id": posting.company_id,
+                        "unfilled": posting.positions - positions_filled,
+                    }
+                )
 
         # Find unmatched workers
         for app in sorted_applications:
@@ -212,12 +214,7 @@ class LaborMarket:
 
         # Update employment records
         for match in matches:
-            self._hire(
-                match["person_id"],
-                match["company_id"],
-                match["wage"],
-                tick
-            )
+            self._hire(match["person_id"], match["company_id"], match["wage"], tick)
 
         # Update market wage (average of successful matches)
         if matches:
@@ -253,13 +250,7 @@ class LaborMarket:
 
         return after_regulation
 
-    def _hire(
-        self,
-        person_id: str,
-        company_id: str,
-        wage: Decimal,
-        tick: int
-    ):
+    def _hire(self, person_id: str, company_id: str, wage: Decimal, tick: int):
         """Record a new hire"""
         # End previous employment if exists
         if person_id in self.employment:
@@ -292,7 +283,7 @@ class LaborMarket:
         """Check if person is employed"""
         return person_id in self.employment
 
-    def get_employer(self, person_id: str) -> Optional[str]:
+    def get_employer(self, person_id: str) -> str | None:
         """Get employer of a person"""
         return self.employment.get(person_id)
 
@@ -300,7 +291,7 @@ class LaborMarket:
         """Get wage of a person"""
         return self.wages.get(person_id, Decimal("0"))
 
-    def get_employees(self, company_id: str) -> Set[str]:
+    def get_employees(self, company_id: str) -> set[str]:
         """Get all employees of a company"""
         return self.company_employees.get(company_id, set())
 
@@ -314,10 +305,10 @@ class LaborMarket:
 
     def initialize_employment(
         self,
-        persons: List,  # List of Person agents
-        companies: List,  # List of Company agents
-        initial_employment_rate: float = 0.85
-    ) -> Dict[str, any]:
+        persons: list,  # List of Person agents
+        companies: list,  # List of Company agents
+        initial_employment_rate: float = 0.85,
+    ) -> dict[str, any]:
         """
         Initialize employment at start of simulation.
 
@@ -328,7 +319,7 @@ class LaborMarket:
         """
         # Calculate total jobs available (based on company capital)
         total_jobs = 0
-        company_jobs: Dict[str, int] = {}
+        company_jobs: dict[str, int] = {}
 
         for company in companies:
             # Jobs proportional to capital stock
@@ -341,11 +332,7 @@ class LaborMarket:
         target_employed = min(target_employed, total_jobs)
 
         # Sort persons by skill (best get jobs first in free market)
-        sorted_persons = sorted(
-            persons,
-            key=lambda p: p.skill_level,
-            reverse=True
-        )
+        sorted_persons = sorted(persons, key=lambda p: p.skill_level, reverse=True)
 
         # Assign workers to companies
         employed_count = 0
@@ -420,7 +407,7 @@ class LaborMarket:
         if len(self.unemployment_history) > 1000:
             self.unemployment_history.pop(0)
 
-    def get_statistics(self) -> Dict[str, any]:
+    def get_statistics(self) -> dict[str, any]:
         """Get current labor market statistics"""
         return {
             "market_wage": str(self.market_wage),
@@ -439,7 +426,11 @@ class LaborMarket:
             return "stable"
 
         recent = sum(self.wage_history[-5:]) / 5
-        older = sum(self.wage_history[-10:-5]) / 5 if len(self.wage_history) >= 10 else recent
+        older = (
+            sum(self.wage_history[-10:-5]) / 5
+            if len(self.wage_history) >= 10
+            else recent
+        )
 
         if recent > older * Decimal("1.02"):
             return "rising"

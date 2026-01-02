@@ -7,17 +7,18 @@ Defines the CountryConfig dataclass and related types for multi-country simulati
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from src.agents.government import RegimeType
 
 
 class RelationType(str, Enum):
     """Relationship types between countries"""
-    ALLY = "ally"           # Positive relationship, low conflict risk
-    NEUTRAL = "neutral"     # No strong ties either way
-    RIVAL = "rival"         # Competitive, moderate conflict risk
-    ENEMY = "enemy"         # Hostile, high conflict risk
+
+    ALLY = "ally"  # Positive relationship, low conflict risk
+    NEUTRAL = "neutral"  # No strong ties either way
+    RIVAL = "rival"  # Competitive, moderate conflict risk
+    ENEMY = "enemy"  # Hostile, high conflict risk
 
 
 @dataclass
@@ -30,56 +31,60 @@ class CountryConfig:
     """
 
     # Identification
-    code: str                      # ISO 3166-1 alpha-3 (e.g., "USA", "BRA")
-    name: str                      # Full name
-    currency: str                  # ISO 4217 currency code (e.g., "USD", "BRL")
+    code: str  # ISO 3166-1 alpha-3 (e.g., "USA", "BRA")
+    name: str  # Full name
+    currency: str  # ISO 4217 currency code (e.g., "USD", "BRL")
 
     # Political regime (Hoppe hierarchy)
     regime_type: RegimeType
-    intervention_level: float      # 0-1 (0=ancap, 1=totalitarian)
+    intervention_level: float  # 0-1 (0=ancap, 1=totalitarian)
 
     # Economic parameters (initial values)
-    gdp_nominal_usd: Decimal       # GDP in USD
+    gdp_nominal_usd: Decimal  # GDP in USD
     population: int
-    unemployment_rate: float       # 0-1
-    inflation_rate: float          # Official (government-reported) - usually lies
-    real_inflation_estimate: float # Austrian estimate (commodity-based)
+    unemployment_rate: float  # 0-1
+    inflation_rate: float  # Official (government-reported) - usually lies
+    real_inflation_estimate: float  # Austrian estimate (commodity-based)
 
     # Central Bank
     central_bank_name: str
-    base_money: Decimal            # In local currency
-    policy_rate: float             # Current interest rate (0-1)
-    inflation_target: float        # CB's stated target (usually 0.02)
+    base_money: Decimal  # In local currency
+    policy_rate: float  # Current interest rate (0-1)
+    inflation_target: float  # CB's stated target (usually 0.02)
 
     # Fiscal position
-    debt_to_gdp: float             # Government debt / GDP ratio
-    tax_burden: float              # Total tax as % of GDP
+    debt_to_gdp: float  # Government debt / GDP ratio
+    tax_burden: float  # Total tax as % of GDP
 
     # International trade
-    trade_openness: float          # (Exports + Imports) / GDP
-    main_exports: List[str] = field(default_factory=list)
-    main_imports: List[str] = field(default_factory=list)
+    trade_openness: float  # (Exports + Imports) / GDP
+    main_exports: list[str] = field(default_factory=list)
+    main_imports: list[str] = field(default_factory=list)
 
     # Market data (Yahoo Finance tickers)
-    stock_index_ticker: Optional[str] = None
-    currency_ticker: Optional[str] = None   # vs USD (e.g., "BRLUSD=X")
-    bond_yield_ticker: Optional[str] = None
+    stock_index_ticker: str | None = None
+    currency_ticker: str | None = None  # vs USD (e.g., "BRLUSD=X")
+    bond_yield_ticker: str | None = None
 
     # Historical context (influences sensitivities and behavior)
-    historical_context: Dict[str, Any] = field(default_factory=dict)
+    historical_context: dict[str, Any] = field(default_factory=dict)
 
     # Country-specific sensitivities (0-1 scale)
-    usd_sensitivity: float = 0.5          # How much USD affects this country
-    inflation_memory: float = 0.5          # Historical inflation trauma
-    commodity_exposure: float = 0.5        # Dependency on commodity prices
-    geopolitical_volatility: float = 0.5   # Political instability risk
+    usd_sensitivity: float = 0.5  # How much USD affects this country
+    inflation_memory: float = 0.5  # Historical inflation trauma
+    commodity_exposure: float = 0.5  # Dependency on commodity prices
+    geopolitical_volatility: float = 0.5  # Political instability risk
 
     def __post_init__(self):
         """Validate configuration after initialization"""
         if not 0 <= self.intervention_level <= 1:
-            raise ValueError(f"intervention_level must be 0-1, got {self.intervention_level}")
+            raise ValueError(
+                f"intervention_level must be 0-1, got {self.intervention_level}"
+            )
         if not 0 <= self.unemployment_rate <= 1:
-            raise ValueError(f"unemployment_rate must be 0-1, got {self.unemployment_rate}")
+            raise ValueError(
+                f"unemployment_rate must be 0-1, got {self.unemployment_rate}"
+            )
         if not 0 <= self.tax_burden <= 1:
             raise ValueError(f"tax_burden must be 0-1, got {self.tax_burden}")
 
@@ -99,12 +104,13 @@ class CountryConfig:
         # Scale: USA = 100K, minimum 1K
         return max(1000, int(100000 * ratio))
 
-    def get_regime_parameters(self) -> Dict[str, float]:
+    def get_regime_parameters(self) -> dict[str, float]:
         """Get default parameters based on regime type"""
         from config.settings import REGIME_PARAMETERS
+
         return REGIME_PARAMETERS.get(self.regime_type, {})
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
             "code": self.code,
@@ -144,35 +150,35 @@ class BilateralRelationship:
     for simulation purposes.
     """
 
-    country_a: str                  # ISO code
-    country_b: str                  # ISO code
+    country_a: str  # ISO code
+    country_b: str  # ISO code
 
     # Relationship type and strength
     relationship_type: RelationType
-    strength: float                 # -1 (enemy) to +1 (strong ally)
+    strength: float  # -1 (enemy) to +1 (strong ally)
 
     # Trade data
-    trade_volume_usd: Decimal       # Annual bilateral trade in USD
+    trade_volume_usd: Decimal  # Annual bilateral trade in USD
     trade_balance: Decimal = Decimal("0")  # Positive = A exports more to B
-    tariff_a_to_b: float = 0.0      # Tariff A imposes on B's goods
-    tariff_b_to_a: float = 0.0      # Tariff B imposes on A's goods
+    tariff_a_to_b: float = 0.0  # Tariff A imposes on B's goods
+    tariff_b_to_a: float = 0.0  # Tariff B imposes on A's goods
 
     # Sanctions (lists of sanction types)
-    sanctions_a_on_b: List[str] = field(default_factory=list)
-    sanctions_b_on_a: List[str] = field(default_factory=list)
+    sanctions_a_on_b: list[str] = field(default_factory=list)
+    sanctions_b_on_a: list[str] = field(default_factory=list)
 
     # Historical and current tensions
-    historical_conflicts: int = 0   # Number of past conflicts
-    current_tensions: List[str] = field(default_factory=list)
+    historical_conflicts: int = 0  # Number of past conflicts
+    current_tensions: list[str] = field(default_factory=list)
 
     # Economic dependency (0-1)
     a_dependency_on_b: float = 0.0  # How much A depends on B
     b_dependency_on_a: float = 0.0  # How much B depends on A
 
     # War probability indicators
-    war_probability: float = 0.0    # 0-1, calculated dynamically
-    war_triggers: List[str] = field(default_factory=list)
-    escalation_level: float = 0.0   # Current level of escalation (0-1)
+    war_probability: float = 0.0  # 0-1, calculated dynamically
+    war_triggers: list[str] = field(default_factory=list)
+    escalation_level: float = 0.0  # Current level of escalation (0-1)
 
     def __post_init__(self):
         """Validate relationship after initialization"""
@@ -199,7 +205,7 @@ class BilateralRelationship:
         """
         return min(self.a_dependency_on_b, self.b_dependency_on_a)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
             "country_a": self.country_a,

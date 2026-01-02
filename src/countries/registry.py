@@ -6,17 +6,15 @@ Provides access to country configurations and helper functions.
 """
 
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from src.agents.government import RegimeType
-from src.countries.base import CountryConfig, BilateralRelationship, RelationType
-
+from src.countries.base import CountryConfig
 
 # =============================================================================
 # COUNTRY CONFIGURATIONS (20 countries)
 # =============================================================================
 
-COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
+COUNTRY_REGISTRY: dict[str, CountryConfig] = {
     # ---------------------------------------------------------------------
     # AMERICAS
     # ---------------------------------------------------------------------
@@ -54,7 +52,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.3,
         geopolitical_volatility=0.2,
     ),
-
     "CAN": CountryConfig(
         code="CAN",
         name="Canada",
@@ -87,7 +84,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.7,
         geopolitical_volatility=0.1,
     ),
-
     "MEX": CountryConfig(
         code="MEX",
         name="Mexico",
@@ -120,7 +116,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.5,
         geopolitical_volatility=0.4,
     ),
-
     "BRA": CountryConfig(
         code="BRA",
         name="Brazil",
@@ -155,7 +150,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.8,
         geopolitical_volatility=0.5,
     ),
-
     "ARG": CountryConfig(
         code="ARG",
         name="Argentina",
@@ -191,7 +185,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.7,
         geopolitical_volatility=0.7,
     ),
-
     # ---------------------------------------------------------------------
     # EUROPE
     # ---------------------------------------------------------------------
@@ -214,7 +207,13 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         tax_burden=0.35,
         trade_openness=0.60,
         main_exports=["machinery", "pharmaceuticals", "vehicles", "gold", "oil"],
-        main_imports=["machinery", "vehicles", "electronics", "gold", "pharmaceuticals"],
+        main_imports=[
+            "machinery",
+            "vehicles",
+            "electronics",
+            "gold",
+            "pharmaceuticals",
+        ],
         stock_index_ticker="^FTSE",
         currency_ticker="GBPUSD=X",
         historical_context={
@@ -228,7 +227,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.3,
         geopolitical_volatility=0.3,
     ),
-
     "DEU": CountryConfig(
         code="DEU",
         name="Germany",
@@ -247,7 +245,13 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         debt_to_gdp=0.66,
         tax_burden=0.40,
         trade_openness=0.88,
-        main_exports=["vehicles", "machinery", "chemicals", "electronics", "pharmaceuticals"],
+        main_exports=[
+            "vehicles",
+            "machinery",
+            "chemicals",
+            "electronics",
+            "pharmaceuticals",
+        ],
         main_imports=["machinery", "oil", "vehicles", "chemicals", "electronics"],
         stock_index_ticker="^GDAXI",
         currency_ticker="EURUSD=X",
@@ -263,7 +267,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.4,
         geopolitical_volatility=0.2,
     ),
-
     "FRA": CountryConfig(
         code="FRA",
         name="France",
@@ -297,7 +300,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.3,
         geopolitical_volatility=0.3,
     ),
-
     "SWE": CountryConfig(
         code="SWE",
         name="Sweden",
@@ -331,7 +333,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.4,
         geopolitical_volatility=0.3,
     ),
-
     "NOR": CountryConfig(
         code="NOR",
         name="Norway",
@@ -365,7 +366,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.8,  # Oil dependent
         geopolitical_volatility=0.1,
     ),
-
     "CHE": CountryConfig(
         code="CHE",
         name="Switzerland",
@@ -401,7 +401,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.2,
         geopolitical_volatility=0.05,
     ),
-
     "LIE": CountryConfig(
         code="LIE",
         name="Liechtenstein",
@@ -436,7 +435,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.1,
         geopolitical_volatility=0.02,
     ),
-
     # ---------------------------------------------------------------------
     # ASIA
     # ---------------------------------------------------------------------
@@ -475,7 +473,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.6,
         geopolitical_volatility=0.6,
     ),
-
     "JPN": CountryConfig(
         code="JPN",
         name="Japan",
@@ -511,7 +508,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.5,
         geopolitical_volatility=0.3,
     ),
-
     "IND": CountryConfig(
         code="IND",
         name="India",
@@ -546,7 +542,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.6,
         geopolitical_volatility=0.5,
     ),
-
     "IDN": CountryConfig(
         code="IDN",
         name="Indonesia",
@@ -580,7 +575,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.7,
         geopolitical_volatility=0.4,
     ),
-
     # ---------------------------------------------------------------------
     # MIDDLE EAST
     # ---------------------------------------------------------------------
@@ -619,7 +613,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.95,  # Almost entirely oil
         geopolitical_volatility=0.5,
     ),
-
     "ARE": CountryConfig(
         code="ARE",
         name="United Arab Emirates",
@@ -654,7 +647,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.6,
         geopolitical_volatility=0.3,
     ),
-
     "TUR": CountryConfig(
         code="TUR",
         name="Turkey",
@@ -690,7 +682,6 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         commodity_exposure=0.5,
         geopolitical_volatility=0.8,
     ),
-
     # ---------------------------------------------------------------------
     # RUSSIA
     # ---------------------------------------------------------------------
@@ -713,7 +704,13 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
         tax_burden=0.28,
         trade_openness=0.45,
         main_exports=["oil", "natural_gas", "metals", "wheat", "weapons"],
-        main_imports=["machinery", "vehicles", "electronics", "pharmaceuticals", "food"],
+        main_imports=[
+            "machinery",
+            "vehicles",
+            "electronics",
+            "pharmaceuticals",
+            "food",
+        ],
         stock_index_ticker="IMOEX.ME",
         currency_ticker="RUBUSD=X",
         historical_context={
@@ -736,25 +733,27 @@ COUNTRY_REGISTRY: Dict[str, CountryConfig] = {
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_country_config(code: str) -> Optional[CountryConfig]:
+
+def get_country_config(code: str) -> CountryConfig | None:
     """Get configuration for a specific country by ISO code"""
     return COUNTRY_REGISTRY.get(code.upper())
 
 
-def get_all_countries() -> List[str]:
+def get_all_countries() -> list[str]:
     """Get list of all country codes"""
     return list(COUNTRY_REGISTRY.keys())
 
 
-def get_countries_by_regime(regime_type: RegimeType) -> List[str]:
+def get_countries_by_regime(regime_type: RegimeType) -> list[str]:
     """Get all countries with a specific regime type"""
     return [
-        code for code, config in COUNTRY_REGISTRY.items()
+        code
+        for code, config in COUNTRY_REGISTRY.items()
         if config.regime_type == regime_type
     ]
 
 
-def get_countries_by_region(region: str) -> List[str]:
+def get_countries_by_region(region: str) -> list[str]:
     """Get countries by region"""
     regions = {
         "americas": ["USA", "CAN", "MEX", "BRA", "ARG"],
@@ -766,17 +765,19 @@ def get_countries_by_region(region: str) -> List[str]:
     return regions.get(region.lower(), [])
 
 
-def get_high_intervention_countries() -> List[str]:
+def get_high_intervention_countries() -> list[str]:
     """Get countries with intervention level > 0.6"""
     return [
-        code for code, config in COUNTRY_REGISTRY.items()
+        code
+        for code, config in COUNTRY_REGISTRY.items()
         if config.intervention_level > 0.6
     ]
 
 
-def get_low_intervention_countries() -> List[str]:
+def get_low_intervention_countries() -> list[str]:
     """Get countries with intervention level < 0.4 (Hoppe's better ones)"""
     return [
-        code for code, config in COUNTRY_REGISTRY.items()
+        code
+        for code, config in COUNTRY_REGISTRY.items()
         if config.intervention_level < 0.4
     ]

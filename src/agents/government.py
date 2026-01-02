@@ -16,13 +16,13 @@ Austrian/Libertarian Theory (Hoppe, Rothbard):
 - Ancap is the ideal (no government)
 """
 
+import random
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Any, List, Optional, Set
 from enum import Enum
-import random
+from typing import Any
 
-from .base import Agent, AgentType, AgentState
+from .base import Agent, AgentState, AgentType
 
 
 class RegimeType(str, Enum):
@@ -30,12 +30,13 @@ class RegimeType(str, Enum):
     Political regime types ordered from WORST to BEST
     according to Hoppe's analysis.
     """
-    TOTALITARIAN = "totalitarian"      # 100% - Worst
+
+    TOTALITARIAN = "totalitarian"  # 100% - Worst
     DEMOCRACY_SOCIALIST = "democracy_socialist"  # 80%
-    DEMOCRACY_LIBERAL = "democracy_liberal"      # 50%
-    MONARCHY = "monarchy"              # 30%
-    MINARCHY = "minarchy"              # 10%
-    ANCAP = "ancap"                    # 0% - Best (Rothbard ideal)
+    DEMOCRACY_LIBERAL = "democracy_liberal"  # 50%
+    MONARCHY = "monarchy"  # 30%
+    MINARCHY = "minarchy"  # 10%
+    ANCAP = "ancap"  # 0% - Best (Rothbard ideal)
 
 
 # Regime parameters based on Hoppe's analysis
@@ -47,7 +48,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.50,
         "regulation": 1.0,
         "time_preference": 0.95,  # Very short-term (steal everything now)
-        "description": "Total state control - Venezuela/Cuba/USSR model"
+        "description": "Total state control - Venezuela/Cuba/USSR model",
     },
     RegimeType.DEMOCRACY_SOCIALIST: {
         "intervention_level": 0.80,
@@ -56,7 +57,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.25,
         "regulation": 0.80,
         "time_preference": 0.80,  # Short electoral cycles
-        "description": "High intervention democracy - Scandinavian model"
+        "description": "High intervention democracy - Scandinavian model",
     },
     RegimeType.DEMOCRACY_LIBERAL: {
         "intervention_level": 0.50,
@@ -65,7 +66,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.10,
         "regulation": 0.50,
         "time_preference": 0.70,
-        "description": "Moderate democracy - USA/UK model"
+        "description": "Moderate democracy - USA/UK model",
     },
     RegimeType.MONARCHY: {
         "intervention_level": 0.30,
@@ -74,7 +75,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.05,
         "regulation": 0.30,
         "time_preference": 0.40,  # Longer-term (dynasty thinking)
-        "description": "Traditional monarchy - Liechtenstein model"
+        "description": "Traditional monarchy - Liechtenstein model",
     },
     RegimeType.MINARCHY: {
         "intervention_level": 0.10,
@@ -83,7 +84,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.02,
         "regulation": 0.10,
         "time_preference": 0.30,
-        "description": "Minimal state - Night watchman state"
+        "description": "Minimal state - Night watchman state",
     },
     RegimeType.ANCAP: {
         "intervention_level": 0.0,
@@ -92,7 +93,7 @@ REGIME_PARAMS = {
         "tax_consumption": 0.0,
         "regulation": 0.0,
         "time_preference": 0.0,  # Natural market preference
-        "description": "Anarcho-capitalism - Rothbard ideal"
+        "description": "Anarcho-capitalism - Rothbard ideal",
     },
 }
 
@@ -100,6 +101,7 @@ REGIME_PARAMS = {
 @dataclass
 class GovernmentState(AgentState):
     """State for government villain"""
+
     # Revenue extraction
     tax_revenue: Decimal = Decimal("0")
     tariff_revenue: Decimal = Decimal("0")
@@ -133,10 +135,10 @@ class Government(Agent):
 
     def __init__(
         self,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         country: str = "USA",
         regime_type: RegimeType = RegimeType.DEMOCRACY_LIBERAL,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(
             agent_id=agent_id,
@@ -161,7 +163,7 @@ class Government(Agent):
 
         # Tariffs (trade barriers)
         self.tariff_rate = 0.05  # Default 5%
-        self.tariff_sectors: Dict[str, float] = {}  # Sector-specific tariffs
+        self.tariff_sectors: dict[str, float] = {}  # Sector-specific tariffs
         self.tariff_mode = "normal"  # normal, trade_war, protectionist
 
         # Regulation
@@ -173,9 +175,9 @@ class Government(Agent):
         self.spending_gdp_ratio = params["intervention_level"] * 0.5
 
         # International relations
-        self.at_war_with: Set[str] = set()
-        self.sanctions_on: Set[str] = set()
-        self.allies: Set[str] = set()
+        self.at_war_with: set[str] = set()
+        self.sanctions_on: set[str] = set()
+        self.allies: set[str] = set()
 
         # ===========================================
         # POLITICAL BUSINESS CYCLE (Democracies only)
@@ -196,15 +198,15 @@ class Government(Agent):
         self.freedom_index = (1 - self.intervention_level) * 100
 
         # Policies
-        self.policies: Dict[str, Any] = {}
+        self.policies: dict[str, Any] = {}
 
     @property
     def total_tax_burden(self) -> float:
         """Combined tax burden"""
         return (
-            self.tax_rate_income * 0.5 +
-            self.tax_rate_capital * 0.3 +
-            self.tax_rate_consumption * 0.2
+            self.tax_rate_income * 0.5
+            + self.tax_rate_capital * 0.3
+            + self.tax_rate_consumption * 0.2
         )
 
     @property
@@ -234,7 +236,9 @@ class Government(Agent):
         # - Reduced investment
         # - Administrative burden on both sides
         # Estimate: 30-50% of tax amount is additional deadweight loss
-        deadweight_multiplier = 0.3 + (self.tax_rate_income * 0.5)  # 30-65% based on rate
+        deadweight_multiplier = 0.3 + (
+            self.tax_rate_income * 0.5
+        )  # 30-65% based on rate
         deadweight = tax * Decimal(str(deadweight_multiplier))
         self.state.deadweight_loss += deadweight
 
@@ -257,7 +261,9 @@ class Government(Agent):
         # - Reduces future capital stock
         # - Compounds over time (lost future productivity)
         # - Estimate: 50-100% additional deadweight loss
-        deadweight_multiplier = 0.5 + (self.tax_rate_capital * 1.0)  # 50-100% based on rate
+        deadweight_multiplier = 0.5 + (
+            self.tax_rate_capital * 1.0
+        )  # 50-100% based on rate
         deadweight = tax * Decimal(str(deadweight_multiplier))
         self.state.deadweight_loss += deadweight
 
@@ -308,7 +314,7 @@ class Government(Agent):
         """
         self.tariff_sectors[sector] = max(0, min(1.0, rate))
 
-    def calculate_tariff_price_impact(self) -> Dict[str, float]:
+    def calculate_tariff_price_impact(self) -> dict[str, float]:
         """
         Calculate how tariffs affect consumer prices.
 
@@ -371,7 +377,7 @@ class Government(Agent):
         self.state.compliance_costs += cost
         return cost
 
-    def calculate_regulatory_burden(self) -> Dict[str, float]:
+    def calculate_regulatory_burden(self) -> dict[str, float]:
         """Calculate the burden of regulation"""
         return {
             "barriers_to_entry": self.regulation_level,
@@ -502,14 +508,14 @@ class Government(Agent):
         5. Spending waste (misallocation)
         """
         return (
-            self.state.deadweight_loss +
-            self.state.compliance_costs +
-            self.state.capital_destroyed +
-            self.state.trade_disruption +
-            self.state.spending_waste
+            self.state.deadweight_loss
+            + self.state.compliance_costs
+            + self.state.capital_destroyed
+            + self.state.trade_disruption
+            + self.state.spending_waste
         )
 
-    def get_damage_report(self) -> Dict[str, Any]:
+    def get_damage_report(self) -> dict[str, Any]:
         """Get comprehensive damage report"""
         return {
             "regime_type": self.regime_type.value,
@@ -529,34 +535,34 @@ class Government(Agent):
             "hoppe_analysis": self._hoppe_analysis(),
         }
 
-    def _hoppe_analysis(self) -> Dict[str, Any]:
+    def _hoppe_analysis(self) -> dict[str, Any]:
         """
         Analysis based on Hoppe's Democracy: The God That Failed
         """
         regime_analysis = {
             RegimeType.TOTALITARIAN: {
                 "verdict": "WORST - Total extraction",
-                "explanation": "No property rights, total control, fastest decline"
+                "explanation": "No property rights, total control, fastest decline",
             },
             RegimeType.DEMOCRACY_SOCIALIST: {
                 "verdict": "VERY BAD - High extraction, short-term thinking",
-                "explanation": "Politicians don't own, so they extract maximum now"
+                "explanation": "Politicians don't own, so they extract maximum now",
             },
             RegimeType.DEMOCRACY_LIBERAL: {
                 "verdict": "BAD - Moderate extraction, still short-term",
-                "explanation": "Better than socialist, but still democracy problems"
+                "explanation": "Better than socialist, but still democracy problems",
             },
             RegimeType.MONARCHY: {
                 "verdict": "LESS BAD - Owner mentality",
-                "explanation": "King preserves capital value for dynasty"
+                "explanation": "King preserves capital value for dynasty",
             },
             RegimeType.MINARCHY: {
                 "verdict": "ACCEPTABLE - Minimal intervention",
-                "explanation": "Night watchman state, limited damage"
+                "explanation": "Night watchman state, limited damage",
             },
             RegimeType.ANCAP: {
                 "verdict": "IDEAL - No forced extraction",
-                "explanation": "All interactions voluntary, maximum freedom"
+                "explanation": "All interactions voluntary, maximum freedom",
             },
         }
 
@@ -564,16 +570,17 @@ class Government(Agent):
             "current_regime": self.regime_type.value,
             "analysis": regime_analysis[self.regime_type],
             "time_preference": self.time_preference,
-            "expected_debt_trend": "increasing" if self.regime_type in [
-                RegimeType.DEMOCRACY_SOCIALIST, RegimeType.DEMOCRACY_LIBERAL
-            ] else "stable",
+            "expected_debt_trend": "increasing"
+            if self.regime_type
+            in [RegimeType.DEMOCRACY_SOCIALIST, RegimeType.DEMOCRACY_LIBERAL]
+            else "stable",
         }
 
     # ===========================================
     # MAIN STEP FUNCTION
     # ===========================================
 
-    def step(self, world_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def step(self, world_state: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute one simulation step"""
         actions = []
 
@@ -608,16 +615,18 @@ class Government(Agent):
         consumption_tax = self.collect_consumption_tax(Decimal(str(total_consumption)))
         tariffs = self.collect_tariff(Decimal(str(total_imports)))
 
-        actions.append({
-            "type": "tax_collection",
-            "income_tax": str(income_tax),
-            "capital_tax": str(capital_tax),
-            "consumption_tax": str(consumption_tax),
-            "tariffs": str(tariffs),
-            "total": str(self.state.tax_revenue + self.state.tariff_revenue),
-            "election_year_efficiency": tax_efficiency,
-            "damage": "Wealth extracted from productive economy"
-        })
+        actions.append(
+            {
+                "type": "tax_collection",
+                "income_tax": str(income_tax),
+                "capital_tax": str(capital_tax),
+                "consumption_tax": str(consumption_tax),
+                "tariffs": str(tariffs),
+                "total": str(self.state.tax_revenue + self.state.tariff_revenue),
+                "election_year_efficiency": tax_efficiency,
+                "damage": "Wealth extracted from productive economy",
+            }
+        )
 
         # 2. Government spending (waste) - INCREASED before elections!
         base_spending = gdp * Decimal(str(self.spending_gdp_ratio))
@@ -625,53 +634,66 @@ class Government(Agent):
         target_spending = base_spending * spending_multiplier
         self.spend(target_spending, "general")
 
-        actions.append({
-            "type": "spending",
-            "amount": str(target_spending),
-            "base_amount": str(base_spending),
-            "election_multiplier": float(spending_multiplier),
-            "deficit": str(self.state.deficit),
-            "damage": "Resources misallocated, no profit/loss signal"
-        })
+        actions.append(
+            {
+                "type": "spending",
+                "amount": str(target_spending),
+                "base_amount": str(base_spending),
+                "election_multiplier": float(spending_multiplier),
+                "deficit": str(self.state.deficit),
+                "damage": "Resources misallocated, no profit/loss signal",
+            }
+        )
 
         # 3. Regulatory compliance costs (burden on businesses)
         # Austrian View: Regulations are hidden taxes that destroy value
         total_business_revenue = world_state.get("total_business_revenue", 0)
         if total_business_revenue > 0:
-            compliance = self.calculate_compliance_cost(Decimal(str(total_business_revenue)))
-            actions.append({
-                "type": "compliance_cost",
-                "amount": str(compliance),
-                "regulation_level": self.regulation_level,
-                "damage": "Hidden tax on business, barriers to entry"
-            })
+            compliance = self.calculate_compliance_cost(
+                Decimal(str(total_business_revenue))
+            )
+            actions.append(
+                {
+                    "type": "compliance_cost",
+                    "amount": str(compliance),
+                    "regulation_level": self.regulation_level,
+                    "damage": "Hidden tax on business, barriers to entry",
+                }
+            )
 
         # 5. War costs
         if self.is_at_war:
             war_cost = self.calculate_war_cost()
-            actions.append({
-                "type": "war_cost",
-                "amount": str(war_cost),
-                "wars": list(self.at_war_with),
-                "damage": "Capital and lives destroyed"
-            })
+            actions.append(
+                {
+                    "type": "war_cost",
+                    "amount": str(war_cost),
+                    "wars": list(self.at_war_with),
+                    "damage": "Capital and lives destroyed",
+                }
+            )
 
         # 6. Sanctions costs
         if self.sanctions_on:
             sanction_cost = self.calculate_sanction_cost()
-            actions.append({
-                "type": "sanction_cost",
-                "amount": str(sanction_cost),
-                "targets": list(self.sanctions_on),
-                "damage": "Trade disruption hurts all parties"
-            })
+            actions.append(
+                {
+                    "type": "sanction_cost",
+                    "amount": str(sanction_cost),
+                    "targets": list(self.sanctions_on),
+                    "damage": "Trade disruption hurts all parties",
+                }
+            )
 
         # 7. Update debt ratio
         if gdp > 0:
             self.debt_gdp_ratio = float(self.state.debt / gdp)
 
         # 8. Democracy deterioration (Hoppe's prediction)
-        if self.regime_type in [RegimeType.DEMOCRACY_SOCIALIST, RegimeType.DEMOCRACY_LIBERAL]:
+        if self.regime_type in [
+            RegimeType.DEMOCRACY_SOCIALIST,
+            RegimeType.DEMOCRACY_LIBERAL,
+        ]:
             # Debt tends to grow in democracies
             self.state.debt *= Decimal("1.001")  # Compound growth
 
@@ -682,22 +704,21 @@ class Government(Agent):
 
         # 9. Election year easing report
         if self.election_easing_active:
-            actions.append({
-                "type": "election_easing",
-                "is_election_year": self.is_election_year,
-                "current_year_in_cycle": round(self.current_year_in_cycle, 2),
-                "easing_active": self.election_easing_active,
-                "spending_boost": f"{(easing_factors['spending_multiplier'] - 1) * 100:.1f}%",
-                "cb_pressure": easing_factors["cb_pressure"],
-                "tax_relief": f"{(1 - easing_factors['tax_collection_efficiency']) * 100:.1f}%",
-                "damage": "Politicians buying votes with fiscal stimulus"
-            })
+            actions.append(
+                {
+                    "type": "election_easing",
+                    "is_election_year": self.is_election_year,
+                    "current_year_in_cycle": round(self.current_year_in_cycle, 2),
+                    "easing_active": self.election_easing_active,
+                    "spending_boost": f"{(easing_factors['spending_multiplier'] - 1) * 100:.1f}%",
+                    "cb_pressure": easing_factors["cb_pressure"],
+                    "tax_relief": f"{(1 - easing_factors['tax_collection_efficiency']) * 100:.1f}%",
+                    "damage": "Politicians buying votes with fiscal stimulus",
+                }
+            )
 
         # Add damage report
-        actions.append({
-            "type": "damage_report",
-            "report": self.get_damage_report()
-        })
+        actions.append({"type": "damage_report", "report": self.get_damage_report()})
 
         return actions
 
@@ -724,7 +745,10 @@ class Government(Agent):
         - Another reason democracy is inferior to monarchy
         """
         # Only democracies have election cycles
-        if self.regime_type not in [RegimeType.DEMOCRACY_LIBERAL, RegimeType.DEMOCRACY_SOCIALIST]:
+        if self.regime_type not in [
+            RegimeType.DEMOCRACY_LIBERAL,
+            RegimeType.DEMOCRACY_SOCIALIST,
+        ]:
             self.is_election_year = False
             self.election_easing_active = False
             return
@@ -746,7 +770,7 @@ class Government(Agent):
         # Pre-election easing starts 6-12 months before election
         self.election_easing_active = years_until_election < 0.75  # ~9 months before
 
-    def get_election_easing_multiplier(self) -> Dict[str, float]:
+    def get_election_easing_multiplier(self) -> dict[str, float]:
         """
         Calculate how much the government eases policy before elections.
 
@@ -790,7 +814,7 @@ class Government(Agent):
             "regulatory_forbearance": 1.0 - intensity * 0.3,
         }
 
-    def pressure_central_bank(self, central_bank, world_state: Dict[str, Any]):
+    def pressure_central_bank(self, central_bank, world_state: dict[str, Any]):
         """
         Democratic governments pressure central banks before elections.
 
@@ -815,7 +839,7 @@ class Government(Agent):
                 "type": "political_pressure",
                 "source": "government",
                 "pressure_level": pressure,
-                "message": f"Government pressuring CB for easier policy before election",
+                "message": "Government pressuring CB for easier policy before election",
                 "suggested_rate_cut": pressure * 0.01,  # Up to 35bps cut
             }
         return None
@@ -855,9 +879,7 @@ class Government(Agent):
 
     @classmethod
     def create_for_country(
-        cls,
-        country: str,
-        regime_type: Optional[RegimeType] = None
+        cls, country: str, regime_type: RegimeType | None = None
     ) -> "Government":
         """Create government for a specific country"""
 
@@ -870,30 +892,25 @@ class Government(Agent):
             "MEX": RegimeType.DEMOCRACY_SOCIALIST,
             "BRA": RegimeType.DEMOCRACY_SOCIALIST,
             "ARG": RegimeType.DEMOCRACY_SOCIALIST,
-
             # Europe
             "GBR": RegimeType.DEMOCRACY_SOCIALIST,
             "DEU": RegimeType.DEMOCRACY_SOCIALIST,
             "FRA": RegimeType.DEMOCRACY_SOCIALIST,
             "SWE": RegimeType.DEMOCRACY_SOCIALIST,
             "NOR": RegimeType.DEMOCRACY_SOCIALIST,
-            "CHE": RegimeType.MINARCHY,    # Switzerland - low intervention
-            "LIE": RegimeType.MONARCHY,    # Liechtenstein - hereditary
-
+            "CHE": RegimeType.MINARCHY,  # Switzerland - low intervention
+            "LIE": RegimeType.MONARCHY,  # Liechtenstein - hereditary
             # Asia
             "CHN": RegimeType.TOTALITARIAN,
             "JPN": RegimeType.DEMOCRACY_LIBERAL,
             "IND": RegimeType.DEMOCRACY_SOCIALIST,
             "IDN": RegimeType.DEMOCRACY_SOCIALIST,
-
             # Middle East
-            "SAU": RegimeType.MONARCHY,    # Saudi Arabia
-            "ARE": RegimeType.MONARCHY,    # UAE
+            "SAU": RegimeType.MONARCHY,  # Saudi Arabia
+            "ARE": RegimeType.MONARCHY,  # UAE
             "TUR": RegimeType.TOTALITARIAN,  # Erdogan autocracy
-
             # Eurasia
             "RUS": RegimeType.TOTALITARIAN,
-
             # Legacy entries (kept for backwards compatibility)
             "PRK": RegimeType.TOTALITARIAN,
             "VEN": RegimeType.TOTALITARIAN,
@@ -915,10 +932,19 @@ class Government(Agent):
         # USA: Trump inaugurated Jan 2025, so Jan 2026 = Year 2
         # (Year 1 = first year of term, Year 4 = election year)
         from datetime import datetime
+
         current_year = datetime.now().year
 
         # Calculate years since last presidential inauguration
-        usa_inauguration_years = [2025, 2021, 2017, 2013, 2009, 2005, 2001]  # Recent ones
+        usa_inauguration_years = [
+            2025,
+            2021,
+            2017,
+            2013,
+            2009,
+            2005,
+            2001,
+        ]  # Recent ones
         brazil_inauguration_years = [2023, 2019, 2015, 2011]  # Brazil 4-year cycle
         mexico_inauguration_years = [2024, 2018, 2012, 2006]  # Mexico 6-year but use 4
 
