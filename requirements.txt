@@ -29,6 +29,10 @@ prophet>=1.1.0                 # Time series forecasting
 
 # Visualization
 plotly>=5.18.0
+matplotlib>=3.8.0              # Charts for PDF reports
+
+# PDF Reports
+reportlab>=4.0.0               # PDF generation
 
 # Utilities
 python-dotenv>=1.0.0           # Environment variables

@@ -31,6 +31,8 @@ from src.data.real_world_conditions import (
     get_real_world_conditions,
     print_conditions_summary,
 )
+from src.reports import ReportGenerator, ReportConfig
+from pathlib import Path
 
 app = typer.Typer(
     name="inflationator",
@@ -66,6 +68,8 @@ def run(
         0.5, "--intervention", "-i",
         help="Central bank intervention level (0-1)"
     ),
+    report: bool = typer.Option(False, "--report", help="Generate PDF scientific report after simulation"),
+    report_dir: str = typer.Option("reports", "--report-dir", help="Directory for generated reports"),
 ):
     """
     Run the economic simulation.
@@ -125,6 +129,10 @@ def run(
 
     # Show results
     _display_results(engine)
+
+    # Generate report if requested
+    if report:
+        _generate_report(engine, report_dir, is_multi_country=False)
 
 
 @app.command()
@@ -571,6 +579,8 @@ def run_multi(
     ),
     months: int = typer.Option(12, "--months", "-m", help="Months to simulate"),
     persons: int = typer.Option(100000, "--persons", "-p", help="Base person agents (scaled by GDP)"),
+    report: bool = typer.Option(False, "--report", help="Generate PDF scientific report after simulation"),
+    report_dir: str = typer.Option("reports", "--report-dir", help="Directory for generated reports"),
 ):
     """
     Run multi-country simulation.
@@ -615,6 +625,10 @@ def run_multi(
 
     # Display results
     _display_multi_country_results(engine)
+
+    # Generate report if requested
+    if report:
+        _generate_report(engine, report_dir, is_multi_country=True)
 
 
 @app.command()
@@ -799,6 +813,46 @@ def compare_countries(
     winner = list(comparison.keys())[0]
     console.print(f"\n[bold green]Best outcome: {winner}[/bold green] (highest freedom index)")
     console.print("[dim]Hoppe's thesis: Less intervention = better outcomes[/dim]")
+
+
+def _generate_report(engine, report_dir: str, is_multi_country: bool = False):
+    """Generate a PDF scientific report from simulation results"""
+    console.print("\n[bold]Generating PDF report...[/bold]")
+
+    try:
+        # Setup report config
+        config = ReportConfig(
+            output_dir=Path(report_dir),
+            include_charts=True,
+            include_austrian_notes=True,
+            include_theory_section=True,
+            include_references=True,
+        )
+
+        generator = ReportGenerator(config)
+
+        # Get summary and history
+        summary = engine.get_summary()
+        history = engine.metrics_history
+
+        # Add initial conditions to summary if available
+        if hasattr(engine, 'external_data') and 'real_conditions' in engine.external_data:
+            summary['initial_conditions'] = engine.external_data['real_conditions']
+
+        # Generate appropriate report
+        if is_multi_country:
+            report_path = generator.generate_multi_country_report(summary, history)
+        else:
+            report_path = generator.generate_single_country_report(summary, history)
+
+        console.print(f"[green]Report generated successfully![/green]")
+        console.print(f"[cyan]Report saved to: {report_path}[/cyan]")
+
+    except ImportError as e:
+        console.print(f"[red]Report generation requires additional dependencies: {e}[/red]")
+        console.print("[dim]Install with: pip install matplotlib reportlab[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error generating report: {e}[/red]")
 
 
 def _display_multi_country_results(engine: MultiCountrySimulationEngine):
