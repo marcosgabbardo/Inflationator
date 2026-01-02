@@ -522,7 +522,7 @@ class PDFReportBuilder:
 
         self.add_paragraph(
             "The simulation is built on Austrian School principles, particularly the contributions of "
-            "Ludwig von Mises, Friedrich Hayek, and Murray Rothbard. Key theoretical foundations include:"
+            "Ludwig von Mises, Friedrich Hayek, Murray Rothbard, and Hans-Hermann Hoppe. Key theoretical foundations include:"
         )
 
         points = [
@@ -535,6 +535,174 @@ class PDFReportBuilder:
 
         for point in points:
             self.add_paragraph(point)
+
+    def add_hayek_section(self, inflation_rate: float, price_distortion: float = 0):
+        """Add section on Hayek's knowledge problem and price signals"""
+        self.add_section("Knowledge and Price Signals (Hayek)")
+
+        self.add_paragraph(
+            "Friedrich Hayek's seminal contribution to economics was demonstrating that prices serve as "
+            "information carriers in a complex economy. No central planner can possess the dispersed, "
+            "tacit knowledge held by millions of individuals. Prices aggregate this knowledge, allowing "
+            "coordination without central direction."
+        )
+
+        self.add_paragraph(
+            f"In this simulation, inflation of {format_percent(inflation_rate)} represents price signal "
+            "distortion. When central banks expand the money supply, relative prices no longer accurately "
+            "reflect true scarcity. Entrepreneurs receive false signals, leading to systematic errors in "
+            "resource allocation that Hayek called 'malinvestment.'"
+        )
+
+        self.add_note(
+            '"The curious task of economics is to demonstrate to men how little they really know about '
+            'what they imagine they can design." - F.A. Hayek, The Fatal Conceit (1988)'
+        )
+
+    def add_rothbard_section(self, cb_damage: float, money_supply_growth: float = 0):
+        """Add section on Rothbard's critique of central banking"""
+        self.add_section("Central Bank Damage (Rothbard)")
+
+        self.add_paragraph(
+            "Murray Rothbard argued that central banking is inherently inflationary and destructive. "
+            "Unlike market-based money (gold, Bitcoin), fiat currency allows unlimited expansion. "
+            "The central bank acts as a legalized counterfeiter, transferring wealth from savers to "
+            "debtors and first-receivers of new money (Cantillon Effect)."
+        )
+
+        self.add_paragraph(
+            f"The simulation tracked {format_currency(cb_damage)} in central bank damage. This represents "
+            "the wealth destruction caused by: (1) purchasing power loss for holders of the currency, "
+            "(2) malinvestment triggered by artificial credit expansion, (3) business cycle boom-bust "
+            "volatility, and (4) wealth redistribution to politically-connected entities."
+        )
+
+        self.add_note(
+            '"The government can, for a time, simply print money to finance its deficits. But the process '
+            'of money printing leads to rising prices and distorts production." - Murray Rothbard, '
+            'What Has Government Done to Our Money? (1963)'
+        )
+
+    def add_hoppe_section(self, regime_type: str, freedom_index: float, gov_damage: float):
+        """Add section on Hoppe's analysis of democracy and time preference"""
+        self.add_section("Regime Analysis (Hoppe)")
+
+        self.add_paragraph(
+            "Hans-Hermann Hoppe's work 'Democracy: The God That Failed' provides a framework for "
+            "understanding how different political regimes affect economic outcomes. Hoppe argues that "
+            "democracy systematically promotes high time preference behavior and economic destruction "
+            "compared to private property order or even monarchy."
+        )
+
+        self.add_subsection("Time Preference and Regime Type")
+        regime_analysis = {
+            'totalitarian': "Totalitarian regimes exhibit extremely high time preference - rulers extract "
+                           "maximum value in the short term with no regard for long-term capital preservation. "
+                           "This explains the economic devastation in communist and fascist states.",
+            'democracy_socialist': "Democratic socialist regimes combine democratic short-termism with "
+                                  "socialist economic intervention. Politicians maximize vote-buying today "
+                                  "at the expense of future generations through debt and monetary expansion.",
+            'democracy_liberal': "Liberal democracies temper intervention with some respect for property "
+                                "rights, but still suffer from electoral incentives that favor present "
+                                "consumption over capital accumulation.",
+            'monarchy': "Monarchies, as Hoppe notes, tend toward lower time preference because the king "
+                       "'owns' the country and has incentive to preserve its capital value for heirs. "
+                       "This doesn't justify monarchy, but explains its relative economic stability.",
+            'minarchy': "Minimal states restrict intervention to essential services, allowing most "
+                       "economic activity to be governed by voluntary exchange. Time preference is "
+                       "determined by market rather than political factors.",
+            'ancap': "Anarcho-capitalism represents the theoretical optimum - pure private property order "
+                    "with no systematic intervention. Time preference is entirely market-determined."
+        }
+
+        regime_key = regime_type.lower().replace(' ', '_')
+        if regime_key in regime_analysis:
+            self.add_paragraph(regime_analysis[regime_key])
+        else:
+            self.add_paragraph(
+                f"The {regime_type} regime shows a freedom index of {freedom_index:.1f}/100 and government "
+                f"damage of {format_currency(gov_damage)}. Higher freedom correlates with better economic outcomes."
+            )
+
+        self.add_note(
+            '"Under democratic conditions, the government apparatus tends to grow relative to the economy... '
+            'The democratic system inexorably tends toward fiscal irresponsibility and exploitation." '
+            '- Hans-Hermann Hoppe, Democracy: The God That Failed (2001)'
+        )
+
+    def add_mises_section(self, business_cycle_phase: str, rate_distortion: float = 0):
+        """Add section on Mises' theory of money and credit"""
+        self.add_section("Business Cycle Theory (Mises)")
+
+        self.add_paragraph(
+            "Ludwig von Mises developed the Austrian Business Cycle Theory, explaining how credit "
+            "expansion without prior savings creates unsustainable booms that must end in busts. "
+            "When banks create credit 'out of thin air,' interest rates fall below the natural rate, "
+            "signaling to entrepreneurs that more savings exist than actually do."
+        )
+
+        phase_analysis = {
+            'boom': "The economy is currently in the BOOM phase. Credit expansion has artificially lowered "
+                   "interest rates, encouraging investment in long-term capital projects. These projects "
+                   "appear profitable at current rates but will prove unprofitable when rates normalize.",
+            'crisis': "The economy is experiencing CRISIS. The boom's malinvestments are being revealed as "
+                     "unprofitable. Resources must be reallocated from failed projects to viable ones. "
+                     "This painful process is necessary to correct previous distortions.",
+            'recession': "The RECESSION phase represents the economy purging malinvestments. Unemployment "
+                        "rises as resources shift from failed boom-era projects. Government attempts to "
+                        "'stimulate' the economy will only delay necessary adjustments.",
+            'recovery': "The economy is in RECOVERY. Resources are being reallocated toward sustainable "
+                       "production. If the central bank resists the temptation to re-inflate, genuine "
+                       "prosperity can emerge based on real savings rather than credit illusion."
+        }
+
+        phase_key = business_cycle_phase.lower()
+        if phase_key in phase_analysis:
+            self.add_paragraph(phase_analysis[phase_key])
+        else:
+            self.add_paragraph(
+                f"The current business cycle phase is '{business_cycle_phase}' with interest rate "
+                f"distortion of {format_percent(rate_distortion)}. This distortion measures how far "
+                "central bank policy has pushed rates from their natural market level."
+            )
+
+        self.add_note(
+            '"There is no means of avoiding the final collapse of a boom brought about by credit expansion. '
+            'The alternative is only whether the crisis should come sooner as the result of voluntary abandonment '
+            'of further credit expansion, or later as a final and total catastrophe of the currency system involved." '
+            '- Ludwig von Mises, Human Action (1949)'
+        )
+
+    def add_bitcoin_analysis_section(self, btc_price: float, btc_change: float, dollar_debasement: float = 0):
+        """Add section analyzing Bitcoin as sound money"""
+        self.add_section("Bitcoin as Sound Money")
+
+        self.add_paragraph(
+            "Bitcoin represents the first successful implementation of a decentralized, "
+            "algorithmically-scarce digital money. With a fixed supply of 21 million coins, "
+            "Bitcoin cannot be inflated by any central authority. This makes it the closest "
+            "approximation to Rothbard's ideal of market-chosen money since the gold standard."
+        )
+
+        self.add_paragraph(
+            f"In this simulation, Bitcoin price moved to {format_currency(btc_price)} "
+            f"({format_percent(btc_change)} change). Bitcoin's price in fiat currency is not merely "
+            "speculation - it represents the market's assessment of fiat purchasing power loss. "
+            "When central banks expand money supply, Bitcoin's price in that currency tends to rise."
+        )
+
+        self.add_subsection("Austrian Interpretation")
+        self.add_paragraph(
+            "From an Austrian perspective, Bitcoin adoption accelerates when: (1) inflation erodes "
+            "fiat purchasing power, (2) capital controls restrict financial freedom, (3) monetary "
+            "policy becomes unpredictable, and (4) trust in central banking institutions declines. "
+            "The simulation tracks these conditions and their effect on Bitcoin demand."
+        )
+
+        self.add_note(
+            '"Bitcoin is money without a state, without a central bank, without a trusted third party. '
+            'It is the spontaneous emergence of a new monetary order." - Saifedean Ammous, The Bitcoin Standard (2018)'
+        )
 
     def add_conclusions_section(
         self,

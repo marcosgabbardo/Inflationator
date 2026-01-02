@@ -17,6 +17,7 @@ from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta
 import asyncio
 import random
+import copy
 from enum import Enum
 
 from src.agents.person import Person
@@ -1884,9 +1885,10 @@ class MultiCountrySimulationEngine:
         self.metrics.tick = self.current_tick
         self.metrics.war_risks = war_risks
 
-        # Collect metrics from each country
+        # Collect metrics from each country (deep copy to preserve history)
         for country, engine in self.country_engines.items():
-            self.metrics.country_metrics[country] = engine.metrics
+            # Create a snapshot of the metrics, not a reference
+            self.metrics.country_metrics[country] = copy.deepcopy(engine.metrics)
 
         # Calculate global metrics
         total_gdp = sum(e.metrics.gdp for e in self.country_engines.values())
@@ -1910,13 +1912,13 @@ class MultiCountrySimulationEngine:
             for k, v in influences.items()
         }
 
-        # Store history
+        # Store history (deep copy to ensure historical values are preserved)
         self.metrics_history.append(MultiCountryMetrics(
             tick=self.metrics.tick,
-            country_metrics=self.metrics.country_metrics.copy(),
+            country_metrics=copy.deepcopy(self.metrics.country_metrics),
             global_metrics=self.metrics.global_metrics.copy(),
-            war_risks=self.metrics.war_risks.copy(),
-            influence_effects=self.metrics.influence_effects.copy(),
+            war_risks=self.metrics.war_risks.copy() if self.metrics.war_risks else [],
+            influence_effects=self.metrics.influence_effects.copy() if self.metrics.influence_effects else {},
         ))
 
     def _print_progress(self):
