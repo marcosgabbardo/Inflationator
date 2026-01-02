@@ -30,16 +30,95 @@ From WORST to BEST:
 
 ## Installation
 
+### Prerequisites
+
+- **Python 3.11 or higher** - [Download Python](https://www.python.org/downloads/)
+- **Git** - [Download Git](https://git-scm.com/downloads)
+- **pip** (comes with Python)
+
+### Step 1: Clone the Repository
+
 ```bash
-# Clone the repository
-cd /path/to/Inflationator
+git clone https://github.com/marcosgabbardo/Inflationator.git
+cd Inflationator
+```
 
-# Create a virtual environment
+### Step 2: Create a Virtual Environment
+
+**Linux / macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
+.\venv\Scripts\Activate.ps1
+```
 
-# Install dependencies
+**Windows (CMD):**
+```cmd
+python -m venv venv
+venv\Scripts\activate.bat
+```
+
+### Step 3: Install Dependencies
+
+**Option A - Using pip (recommended for users):**
+```bash
 pip install -r requirements.txt
+```
+
+**Option B - Using pyproject.toml (recommended for development):**
+```bash
+pip install -e .
+```
+
+**Option C - Install with development tools:**
+```bash
+pip install -e ".[dev]"
+```
+
+### Step 4: Verify Installation
+
+```bash
+# Check if the CLI is working
+python -m src.cli.main --help
+
+# Run a quick test
+python -m src.cli.main regimes
+```
+
+### Step 5: (Optional) Initialize Database
+
+If you want to persist simulation data to MySQL:
+
+1. Create a `.env` file in the project root:
+```bash
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/inflationator
+```
+
+2. Initialize the database:
+```bash
+python -m src.cli.main init-db
+```
+
+### Troubleshooting
+
+**Prophet installation issues (Windows):**
+```bash
+pip install prophet --no-cache-dir
+```
+
+**Permission errors on macOS/Linux:**
+```bash
+pip install --user -r requirements.txt
+```
+
+**Upgrade pip if you encounter issues:**
+```bash
+pip install --upgrade pip
 ```
 
 ## CLI Commands
