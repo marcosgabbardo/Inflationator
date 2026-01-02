@@ -1,8 +1,8 @@
 """
-Report Generator
+Report Generator - Academic Whitepaper Style
 
-Main module for generating comprehensive simulation reports.
-Combines chart generation, PDF building, and data analysis.
+Generates comprehensive PDF reports for economic simulations.
+Output format inspired by academic papers and whitepapers.
 """
 
 from dataclasses import dataclass, field
@@ -10,10 +10,9 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from decimal import Decimal
-import json
 
 from .charts import ChartGenerator
-from .pdf_generator import PDFReportBuilder
+from .pdf_generator import PDFReportBuilder, format_currency, format_percent, format_number
 
 
 @dataclass
@@ -21,28 +20,37 @@ class ReportConfig:
     """Configuration for report generation"""
     output_dir: Path = field(default_factory=lambda: Path("reports"))
     include_charts: bool = True
+    include_methodology: bool = True
+    include_references: bool = True
     include_austrian_notes: bool = True
     include_theory_section: bool = True
-    include_references: bool = True
-    chart_width: float = 6.0
 
 
 class ReportGenerator:
     """
-    Generates comprehensive PDF reports for economic simulations.
+    Generates academic-style PDF reports for economic simulations.
 
-    Features:
-    - Scientific article formatting
-    - Multiple chart visualizations
-    - Austrian Economics explanations
-    - Agent interaction summaries
-    - Country comparison (multi-country)
+    Output format inspired by Satoshi Nakamoto's Bitcoin whitepaper:
+    - Clean, minimal formatting
+    - Numbered sections
+    - Compact tables
+    - Academic references
     """
 
     def __init__(self, config: Optional[ReportConfig] = None):
         self.config = config or ReportConfig()
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         self.chart_generator = ChartGenerator(self.config.output_dir / "charts")
+        self.table_counter = 0
+        self.figure_counter = 0
+
+    def _next_table(self) -> int:
+        self.table_counter += 1
+        return self.table_counter
+
+    def _next_figure(self) -> int:
+        self.figure_counter += 1
+        return self.figure_counter
 
     def generate_single_country_report(
         self,
@@ -50,176 +58,91 @@ class ReportGenerator:
         metrics_history: List[Any],
         output_filename: Optional[str] = None
     ) -> Path:
-        """
-        Generate a comprehensive report for a single-country simulation.
+        """Generate academic-style report for single-country simulation."""
 
-        Args:
-            simulation_summary: Summary from engine.get_summary()
-            metrics_history: List of SimulationMetrics from simulation
-            output_filename: Optional custom filename
+        # Reset counters
+        self.table_counter = 0
+        self.figure_counter = 0
 
-        Returns:
-            Path to the generated PDF
-        """
         # Setup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        country = simulation_summary.get('config', {}).get('country', 'Unknown')
-        regime = simulation_summary.get('config', {}).get('regime', 'Unknown')
+        country = simulation_summary.get('config', {}).get('country', 'USA')
+        regime = simulation_summary.get('config', {}).get('regime', 'democracy_liberal')
 
         if output_filename is None:
             output_filename = f"simulation_report_{country}_{timestamp}.pdf"
 
         output_path = self.config.output_dir / output_filename
 
-        # Initialize PDF builder
-        pdf = PDFReportBuilder(
-            output_path=output_path,
-            title=f"Economic Simulation Report: {country}",
-            author="Inflationator"
-        )
+        # Initialize PDF
+        pdf = PDFReportBuilder(output_path)
 
-        # =======================
-        # TITLE PAGE
-        # =======================
+        # Title section
         pdf.add_title_page(
-            title=f"Economic Simulation Report",
-            subtitle=f"{country} under {regime} Regime",
-            country=country,
-            regime=regime
+            title="Austrian Economics Simulation Analysis",
+            subtitle=f"Economic Analysis of {country} under {regime.replace('_', ' ').title()} Regime"
         )
 
-        # =======================
-        # ABSTRACT
-        # =======================
-        abstract = self._generate_abstract(simulation_summary, metrics_history, country)
+        # Abstract
+        abstract = self._generate_single_country_abstract(simulation_summary, metrics_history, country)
         pdf.add_abstract(abstract)
 
-        # =======================
-        # TABLE OF CONTENTS (manual for now)
-        # =======================
-        pdf.add_section("Table of Contents")
-        toc_items = [
-            "1. Executive Summary",
-            "2. Simulation Configuration",
-            "3. Initial Economic Conditions",
-            "4. Economic Dashboard",
-            "5. Price Evolution Analysis",
-            "6. Monetary Analysis",
-            "7. Labor Market Analysis",
-            "8. Intervention Damage Assessment",
-            "9. Business Cycle Analysis",
-            "10. Conclusions and Recommendations",
-        ]
-        if self.config.include_theory_section:
-            toc_items.append("11. Theoretical Framework")
-        if self.config.include_references:
-            toc_items.append("12. References")
-
-        pdf.add_numbered_list(toc_items)
-        pdf.add_page_break()
-
-        # =======================
-        # 1. EXECUTIVE SUMMARY
-        # =======================
-        pdf.add_section("1. Executive Summary")
-        self._add_executive_summary(pdf, simulation_summary, metrics_history, country)
-
-        # =======================
-        # 2. SIMULATION CONFIGURATION
-        # =======================
-        pdf.add_simulation_config_section(simulation_summary.get('config', {}))
-
-        # =======================
-        # 3. INITIAL CONDITIONS
-        # =======================
-        if 'initial_conditions' in simulation_summary:
-            pdf.add_initial_conditions_section(
-                simulation_summary['initial_conditions'],
-                country
-            )
-
-        pdf.add_page_break()
-
-        # =======================
-        # 4. ECONOMIC DASHBOARD
-        # =======================
-        if self.config.include_charts and metrics_history:
-            dashboard_bytes = self.chart_generator.create_simulation_dashboard(
-                metrics_history,
-                title=f"{country} Economic Simulation Dashboard"
-            )
-            pdf.add_dashboard(
-                dashboard_bytes,
-                f"Figure 1: Comprehensive dashboard showing key economic indicators for {country} simulation."
-            )
-            pdf.add_page_break()
-
-        # =======================
-        # 5. PRICE EVOLUTION ANALYSIS
-        # =======================
-        pdf.add_section("5. Price Evolution Analysis")
-        self._add_price_analysis(pdf, metrics_history, country)
-        pdf.add_page_break()
-
-        # =======================
-        # 6. MONETARY ANALYSIS
-        # =======================
-        pdf.add_section("6. Monetary Analysis")
-        self._add_monetary_analysis(pdf, metrics_history, simulation_summary)
-        pdf.add_page_break()
-
-        # =======================
-        # 7. LABOR MARKET ANALYSIS
-        # =======================
-        pdf.add_section("7. Labor Market Analysis")
-        self._add_labor_analysis(pdf, metrics_history, simulation_summary)
-
-        # =======================
-        # 8. INTERVENTION DAMAGE
-        # =======================
-        damage_summary = simulation_summary.get('damage_summary', {})
-        pdf.add_damage_summary_table(
-            damage_summary.get('central_bank', {}),
-            damage_summary.get('government', {})
+        # Introduction
+        pdf.add_section("Introduction")
+        pdf.add_paragraph(
+            f"This paper presents the results of an agent-based economic simulation of {country}, "
+            f"conducted using the Inflationator simulation engine. The simulation employs Austrian "
+            f"Economics principles to model economic behavior and track the impact of government "
+            f"and central bank intervention on economic outcomes."
         )
-        pdf.add_page_break()
+        pdf.add_paragraph(
+            "Unlike mainstream economic models that treat intervention as neutral or beneficial, "
+            "this framework recognizes that all intervention creates economic distortions. "
+            "The simulation quantifies these distortions as 'damage' - value destroyed through "
+            "misallocation of resources, deadweight loss, and malinvestment."
+        )
 
-        # =======================
-        # 9. BUSINESS CYCLE ANALYSIS
-        # =======================
-        pdf.add_section("9. Business Cycle Analysis")
-        self._add_business_cycle_analysis(pdf, simulation_summary)
+        # Methodology
+        if self.config.include_methodology:
+            pdf.add_methodology_section()
 
-        # =======================
-        # 10. CONCLUSIONS
-        # =======================
+        # Simulation Parameters
+        self._add_parameters_section(pdf, simulation_summary)
+
+        # Results: Price Evolution
+        self._add_price_results_section(pdf, simulation_summary, metrics_history, country)
+
+        # Results: Monetary Analysis
+        self._add_monetary_results_section(pdf, simulation_summary, metrics_history)
+
+        # Results: Labor Market
+        self._add_labor_results_section(pdf, simulation_summary, metrics_history)
+
+        # Intervention Damage Analysis
+        self._add_damage_analysis_section(pdf, simulation_summary)
+
+        # Business Cycle
+        self._add_business_cycle_section(pdf, simulation_summary)
+
+        # Dashboard (if charts enabled)
+        if self.config.include_charts and metrics_history:
+            self._add_dashboard_section(pdf, metrics_history, country)
+
+        # Conclusions
         final_metrics = metrics_history[-1] if metrics_history else None
         freedom_index = final_metrics.freedom_index if final_metrics else 50
         total_damage = (
             (final_metrics.central_bank_damage if final_metrics else Decimal("0")) +
             (final_metrics.government_damage if final_metrics else Decimal("0"))
         )
-        recommendation = damage_summary.get('recommendation', 'Reduce intervention for better outcomes.')
+        pdf.add_conclusions_section(freedom_index, total_damage)
 
-        pdf.add_conclusions_section(freedom_index, total_damage, recommendation)
-
-        # =======================
-        # 11. THEORETICAL FRAMEWORK (optional)
-        # =======================
-        if self.config.include_theory_section:
-            pdf.add_page_break()
-            pdf.add_austrian_theory_section()
-
-        # =======================
-        # 12. REFERENCES (optional)
-        # =======================
+        # References
         if self.config.include_references:
             pdf.add_references_section()
 
-        # Build PDF
+        # Build
         pdf.build()
-        print(f"Report generated: {output_path}")
-
         return output_path
 
     def generate_multi_country_report(
@@ -228,17 +151,12 @@ class ReportGenerator:
         metrics_history: List[Any],
         output_filename: Optional[str] = None
     ) -> Path:
-        """
-        Generate a comprehensive report for a multi-country simulation.
+        """Generate academic-style report for multi-country simulation."""
 
-        Args:
-            simulation_summary: Summary from MultiCountryEngine.get_summary()
-            metrics_history: List of MultiCountryMetrics from simulation
-            output_filename: Optional custom filename
+        # Reset counters
+        self.table_counter = 0
+        self.figure_counter = 0
 
-        Returns:
-            Path to the generated PDF
-        """
         # Setup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         countries = simulation_summary.get('config', {}).get('countries', [])
@@ -249,177 +167,112 @@ class ReportGenerator:
 
         output_path = self.config.output_dir / output_filename
 
-        # Initialize PDF builder
-        pdf = PDFReportBuilder(
-            output_path=output_path,
-            title="Multi-Country Economic Simulation Report",
-            author="Inflationator"
-        )
+        # Initialize PDF
+        pdf = PDFReportBuilder(output_path)
 
-        # =======================
-        # TITLE PAGE
-        # =======================
+        # Title
         pdf.add_title_page(
-            title="Multi-Country Economic Simulation",
-            subtitle=f"Comparative Analysis of {num_countries} Countries",
+            title="Comparative Economic Analysis",
+            subtitle=f"Multi-Country Simulation: {num_countries} Economies"
         )
 
-        # =======================
-        # ABSTRACT
-        # =======================
+        # Abstract
         abstract = self._generate_multi_country_abstract(simulation_summary, metrics_history)
         pdf.add_abstract(abstract)
 
-        # =======================
-        # PARTICIPATING COUNTRIES
-        # =======================
-        pdf.add_section("Participating Countries")
-        country_summary = simulation_summary.get('countries', {})
-
-        headers = ["Country", "Regime", "Freedom Index", "Inflation", "Unemployment"]
-        rows = []
-        for country, data in country_summary.items():
-            rows.append([
-                country,
-                data.get('regime', 'N/A'),
-                f"{data.get('freedom_index', 0):.1f}",
-                f"{data.get('inflation', 0):.1%}",
-                f"{data.get('unemployment', 0):.1%}",
-            ])
-
-        pdf.add_comparison_table(
-            "Country Overview",
-            headers,
-            rows,
-            "Table 1: Overview of all simulated countries and their final metrics."
+        # Introduction
+        pdf.add_section("Introduction")
+        pdf.add_paragraph(
+            f"This paper presents a comparative analysis of {num_countries} national economies "
+            "simulated simultaneously using the Inflationator engine. Each country is modeled "
+            "with its own government regime, central bank policy, and agent population. "
+            "The simulation tracks inter-country relationships including trade flows, tariffs, "
+            "sanctions, and conflict probabilities."
         )
-        pdf.add_page_break()
+        pdf.add_paragraph(
+            "The Austrian Economics framework predicts that countries with greater economic "
+            "freedom (less intervention) will outperform those with heavy state involvement. "
+            "This simulation provides empirical support for this thesis by comparing outcomes "
+            "across different regime types."
+        )
 
-        # =======================
-        # WAR RISK ANALYSIS
-        # =======================
-        pdf.add_section("Geopolitical Risk Analysis")
-        war_risks = simulation_summary.get('war_risks', [])
+        # Methodology
+        if self.config.include_methodology:
+            pdf.add_methodology_section()
 
-        if war_risks:
-            pdf.add_paragraph(
-                "The following country pairs show elevated probability of military conflict based on "
-                "their relationship dynamics, trade tensions, historical grievances, and current sanctions:"
-            )
+        # Country Overview
+        self._add_country_overview_section(pdf, simulation_summary)
 
-            # War risk chart
-            if self.config.include_charts:
-                war_chart = self.chart_generator.create_war_risk_chart(
-                    war_risks,
-                    "War Risk Assessment Between Country Pairs"
-                )
-                pdf.add_chart(war_chart, "Figure: War probability between country pairs", width=5.5, height=3)
+        # Comparative Rankings
+        self._add_rankings_section(pdf, simulation_summary)
 
-            pdf.add_austrian_note(
-                "Austrian/Classical Liberal View: Free trade creates peace. "
-                "When nations trade freely, the cost of war increases dramatically (loss of trade partners). "
-                "Protectionism and sanctions increase conflict probability."
-            )
-        else:
-            pdf.add_paragraph("No significant war risks were detected during the simulation period.")
+        # Geopolitical Analysis
+        self._add_geopolitical_section(pdf, simulation_summary)
 
-        pdf.add_page_break()
+        # Global Metrics
+        self._add_global_metrics_section(pdf, simulation_summary)
 
-        # =======================
-        # COUNTRY RANKINGS
-        # =======================
-        pdf.add_section("Country Rankings and Comparisons")
-        self._add_country_rankings(pdf, simulation_summary)
-
-        # =======================
-        # COMPARATIVE EVOLUTION CHARTS
-        # =======================
+        # Evolution Charts
         if self.config.include_charts and metrics_history:
-            pdf.add_section("Comparative Economic Evolution")
-            self._add_multi_country_charts(pdf, metrics_history, simulation_summary)
+            self._add_evolution_charts_section(pdf, metrics_history, simulation_summary)
 
-        pdf.add_page_break()
-
-        # =======================
-        # GLOBAL METRICS
-        # =======================
-        pdf.add_section("Global Economic Metrics")
-        global_metrics = simulation_summary.get('global_metrics', {})
-        pdf.add_metrics_table("Aggregate Global Metrics", global_metrics)
-
-        # =======================
-        # CONCLUSIONS
-        # =======================
-        pdf.add_section("Conclusions")
-
-        # Find best and worst countries
-        sorted_by_freedom = sorted(
+        # Conclusions
+        country_summary = simulation_summary.get('countries', {})
+        sorted_countries = sorted(
             country_summary.items(),
             key=lambda x: x[1].get('freedom_index', 0),
             reverse=True
         )
 
-        if sorted_by_freedom:
-            best = sorted_by_freedom[0]
-            worst = sorted_by_freedom[-1]
+        best = sorted_countries[0][0] if sorted_countries else None
+        worst = sorted_countries[-1][0] if sorted_countries else None
+        best_freedom = sorted_countries[0][1].get('freedom_index', 50) if sorted_countries else 50
 
-            pdf.add_paragraph(
-                f"<b>Best Performing Country:</b> {best[0]} with Freedom Index {best[1].get('freedom_index', 0):.1f}"
-            )
-            pdf.add_paragraph(
-                f"<b>Worst Performing Country:</b> {worst[0]} with Freedom Index {worst[1].get('freedom_index', 0):.1f}"
-            )
-
-        pdf.add_austrian_note(
-            "The data consistently shows that countries with higher economic freedom "
-            "(lower intervention, lower taxes, sound money) outperform those with heavy intervention. "
-            "This aligns with Austrian Economics predictions: free markets create prosperity; "
-            "intervention destroys it."
+        global_metrics = simulation_summary.get('global_metrics', {})
+        total_damage = (
+            float(global_metrics.get('total_cb_damage', 0)) +
+            float(global_metrics.get('total_gov_damage', 0))
         )
 
-        # =======================
-        # REFERENCES
-        # =======================
+        pdf.add_conclusions_section(best_freedom, total_damage, best, worst)
+
+        # References
         if self.config.include_references:
             pdf.add_references_section()
 
-        # Build PDF
+        # Build
         pdf.build()
-        print(f"Multi-country report generated: {output_path}")
-
         return output_path
 
     # ===========================================
-    # HELPER METHODS
+    # HELPER METHODS - ABSTRACTS
     # ===========================================
 
-    def _generate_abstract(
+    def _generate_single_country_abstract(
         self,
         summary: Dict[str, Any],
         history: List[Any],
         country: str
     ) -> str:
-        """Generate abstract text for single-country report"""
         config = summary.get('config', {})
         metrics = summary.get('metrics', {})
-        damage = summary.get('damage_summary', {})
 
         duration = config.get('ticks', 12)
-        regime = config.get('regime', 'unknown')
         inflation = metrics.get('inflation_rate', 0)
         freedom = metrics.get('freedom_index', 50)
-
-        total_damage = damage.get('total_intervention_damage', '0')
+        cb_damage = metrics.get('central_bank_damage', 0)
+        gov_damage = metrics.get('government_damage', 0)
 
         return (
-            f"This report presents a comprehensive analysis of an economic simulation for {country} "
-            f"operating under a {regime} regime over a period of {duration} months. "
-            f"The simulation employs Austrian Economics principles to model agent behavior, "
-            f"market dynamics, and the effects of government and central bank intervention. "
-            f"Key findings include an annualized inflation rate of {inflation:.1%}, "
-            f"a freedom index of {freedom:.1f}/100, and total intervention damage of ${total_damage}. "
-            f"The analysis quantifies the economic distortions caused by monetary and fiscal policy, "
-            f"providing evidence for the Austrian claim that intervention destroys value."
+            f"We present results from a {duration}-month economic simulation of {country} using "
+            f"agent-based modeling within an Austrian Economics framework. The simulation tracked "
+            f"{config.get('num_persons', 100000):,} economic agents interacting across multiple markets. "
+            f"Results show an annualized inflation rate of {format_percent(inflation)}, an economic "
+            f"freedom index of {freedom:.1f}/100, and total intervention damage of "
+            f"{format_currency(float(cb_damage) + float(gov_damage))}. Central bank interventions "
+            f"(monetary expansion, rate manipulation) caused {format_currency(cb_damage)} in damage, "
+            f"while government interventions (taxation, regulation, tariffs) caused {format_currency(gov_damage)}. "
+            f"These findings support the Austrian prediction that intervention systematically destroys value."
         )
 
     def _generate_multi_country_abstract(
@@ -427,306 +280,389 @@ class ReportGenerator:
         summary: Dict[str, Any],
         history: List[Any]
     ) -> str:
-        """Generate abstract for multi-country report"""
         countries = summary.get('config', {}).get('countries', [])
-        num_countries = len(countries)
         global_metrics = summary.get('global_metrics', {})
 
         return (
-            f"This report presents a comparative analysis of economic simulations across {num_countries} countries. "
-            f"Each country is modeled with its own government regime, central bank, and agent population. "
-            f"The simulation tracks inter-country relationships including trade flows, tariffs, sanctions, "
-            f"and war probabilities. Results demonstrate the Austrian Economics thesis that economic freedom "
-            f"correlates strongly with prosperity, while intervention correlates with economic destruction. "
-            f"Global metrics show average inflation of {global_metrics.get('avg_inflation', 0):.1%} and "
-            f"average freedom index of {global_metrics.get('avg_freedom_index', 50):.1f}."
+            f"We present a comparative analysis of {len(countries)} national economies simulated "
+            f"using agent-based modeling. Each country operates under a distinct political regime "
+            f"with its own central bank and government intervention levels. The simulation tracks "
+            f"inter-country trade, currency relationships, and conflict probabilities. "
+            f"Results show average inflation of {format_percent(global_metrics.get('avg_inflation', 0))} "
+            f"and average freedom index of {global_metrics.get('avg_freedom_index', 50):.1f}. "
+            f"Total global intervention damage reached {format_currency(float(global_metrics.get('total_cb_damage', 0)) + float(global_metrics.get('total_gov_damage', 0)))}. "
+            f"Countries with higher economic freedom consistently demonstrated superior economic outcomes, "
+            f"validating the Austrian thesis that free markets outperform interventionist systems."
         )
 
-    def _add_executive_summary(
+    # ===========================================
+    # HELPER METHODS - SINGLE COUNTRY SECTIONS
+    # ===========================================
+
+    def _add_parameters_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add simulation parameters section"""
+        pdf.add_section("Simulation Parameters")
+
+        config = summary.get('config', {})
+        params = {
+            'Country': config.get('country', 'USA'),
+            'Regime Type': config.get('regime', 'unknown').replace('_', ' ').title(),
+            'Duration': f"{config.get('ticks', 12)} months",
+            'Agent Population': f"{config.get('num_persons', 100000):,} persons",
+            'Companies': f"{config.get('num_companies', 10000):,}",
+            'Banks': f"{config.get('num_banks', 500):,}",
+            'CB Intervention Level': format_percent(config.get('central_bank_intervention', 0.5)),
+        }
+
+        pdf.add_metrics_table("", params, "Simulation configuration parameters", self._next_table())
+
+    def _add_price_results_section(
         self,
         pdf: PDFReportBuilder,
         summary: Dict[str, Any],
         history: List[Any],
         country: str
     ):
-        """Add executive summary content"""
-        metrics = summary.get('metrics', {})
-        damage = summary.get('damage_summary', {})
+        """Add price evolution results section"""
+        pdf.add_section("Results: Price Evolution")
+
+        if not history:
+            pdf.add_paragraph("No price history data available for this simulation.")
+            return
+
+        # Initial and final prices
+        initial = history[0]
+        final = history[-1]
+
+        btc_change = (float(final.bitcoin_price) - float(initial.bitcoin_price)) / float(initial.bitcoin_price)
+        gold_change = (float(final.gold_price) - float(initial.gold_price)) / float(initial.gold_price)
 
         pdf.add_paragraph(
-            f"This simulation of {country}'s economy reveals the true cost of government and "
-            f"central bank intervention. Unlike mainstream economic models that ignore or justify intervention, "
-            f"this Austrian-framework simulation tracks every distortion and its economic impact."
+            f"During the simulation period, Bitcoin price moved from {format_currency(initial.bitcoin_price)} "
+            f"to {format_currency(final.bitcoin_price)} ({format_percent(btc_change)} change). "
+            f"Gold price moved from {format_currency(initial.gold_price)} to {format_currency(final.gold_price)} "
+            f"({format_percent(gold_change)} change)."
         )
 
-        # Key findings
-        findings = []
-
-        # Inflation finding
-        inflation = metrics.get('inflation_rate', 0)
-        if inflation > 0.10:
-            findings.append(f"High inflation ({inflation:.1%}) driven primarily by monetary expansion")
-        elif inflation > 0.05:
-            findings.append(f"Moderate inflation ({inflation:.1%}) reflecting ongoing currency debasement")
-        else:
-            findings.append(f"Low inflation ({inflation:.1%}) suggesting relatively restrained monetary policy")
-
-        # Freedom finding
-        freedom = metrics.get('freedom_index', 50)
-        if freedom >= 70:
-            findings.append(f"High economic freedom ({freedom:.1f}) enabling market coordination")
-        elif freedom >= 50:
-            findings.append(f"Moderate economic freedom ({freedom:.1f}) with notable intervention costs")
-        else:
-            findings.append(f"Low economic freedom ({freedom:.1f}) causing significant market distortions")
-
-        # Bitcoin finding
-        btc_price = metrics.get('bitcoin_price', '0')
-        findings.append(f"Bitcoin price of ${float(btc_price):,.0f} reflects dollar purchasing power")
-
-        # Damage finding
-        total_damage = damage.get('total_intervention_damage', '0')
-        findings.append(f"Total intervention damage: ${total_damage}")
-
-        pdf.add_bullet_list(findings, "Key Findings")
-
-        pdf.add_austrian_note(
-            "Every dollar of intervention damage represents real value that could have been "
-            "created through voluntary exchange. This is not theoretical; it is measured "
-            "through market distortions, malinvestment, and deadweight loss."
+        pdf.add_note(
+            "In Austrian theory, hard asset appreciation reflects fiat currency debasement rather than "
+            "speculation. Bitcoin's fixed supply (21M) makes it an ideal measure of dollar purchasing power loss."
         )
 
-    def _add_price_analysis(
+        # Price table
+        price_data = {
+            'Initial BTC Price': initial.bitcoin_price,
+            'Final BTC Price': final.bitcoin_price,
+            'BTC Change': f"{btc_change*100:+.1f}%",
+            'Initial Gold Price': initial.gold_price,
+            'Final Gold Price': final.gold_price,
+            'Gold Change': f"{gold_change*100:+.1f}%",
+        }
+        pdf.add_metrics_table("", price_data, "Price evolution during simulation", self._next_table())
+
+        # Charts
+        if self.config.include_charts:
+            btc_prices = [m.bitcoin_price for m in history]
+            btc_chart = self.chart_generator.create_bitcoin_price_chart(
+                btc_prices, f"Bitcoin Price Evolution"
+            )
+            pdf.add_chart(btc_chart, "Bitcoin price trajectory showing monetary conditions impact", figure_num=self._next_figure())
+
+    def _add_monetary_results_section(
+        self,
+        pdf: PDFReportBuilder,
+        summary: Dict[str, Any],
+        history: List[Any]
+    ):
+        """Add monetary analysis section"""
+        pdf.add_section("Results: Monetary Analysis")
+
+        if not history:
+            pdf.add_paragraph("No monetary data available.")
+            return
+
+        initial = history[0]
+        final = history[-1]
+
+        pdf.add_paragraph(
+            f"The simulation tracked monetary expansion and its effects. Base money supply "
+            f"changed from {format_currency(initial.money_supply)} to {format_currency(final.money_supply)}. "
+            f"Credit created through fractional reserve banking reached {format_currency(final.credit_expansion)}. "
+            f"The resulting annualized inflation rate was {format_percent(final.inflation_rate)}."
+        )
+
+        pdf.add_note(
+            "Austrian Business Cycle Theory predicts that credit expansion without corresponding savings "
+            "leads to malinvestment. The 'boom' is unsustainable and must end in a 'bust' to correct "
+            "the misallocation of resources."
+        )
+
+        # Monetary metrics
+        monetary_data = {
+            'Initial Money Supply': initial.money_supply,
+            'Final Money Supply': final.money_supply,
+            'Credit Created': final.credit_expansion,
+            'Inflation Rate (Annualized)': final.inflation_rate,
+            'Central Bank Damage': final.central_bank_damage,
+        }
+        pdf.add_metrics_table("", monetary_data, "Monetary indicators", self._next_table())
+
+    def _add_labor_results_section(
+        self,
+        pdf: PDFReportBuilder,
+        summary: Dict[str, Any],
+        history: List[Any]
+    ):
+        """Add labor market section"""
+        pdf.add_section("Results: Labor Market")
+
+        if not history:
+            pdf.add_paragraph("No labor data available.")
+            return
+
+        final = history[-1]
+
+        pdf.add_paragraph(
+            f"The unemployment rate at simulation end was {format_percent(final.unemployment_rate)}. "
+            f"In Austrian economics, involuntary unemployment results from intervention "
+            f"(minimum wage, regulations, taxation) that prevents the labor market from clearing. "
+            f"The natural unemployment rate in a free market would be lower."
+        )
+
+        labor_data = {
+            'Unemployment Rate': final.unemployment_rate,
+            'GDP': final.gdp,
+            'Freedom Index': f"{final.freedom_index:.1f}/100",
+        }
+        pdf.add_metrics_table("", labor_data, "Labor market indicators", self._next_table())
+
+    def _add_damage_analysis_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add intervention damage analysis section"""
+        pdf.add_section("Intervention Damage Analysis")
+
+        damage = summary.get('damage_summary', {})
+        metrics = summary.get('metrics', {})
+
+        pdf.add_paragraph(
+            "A core principle of Austrian economics is that intervention creates deadweight loss. "
+            "This simulation quantifies the damage caused by government and central bank actions. "
+            "Unlike mainstream models that ignore or justify intervention costs, this framework "
+            "tracks every dollar of value destroyed."
+        )
+
+        pdf.add_subsection("Central Bank Damage")
+        pdf.add_paragraph(
+            f"Central bank interventions caused {format_currency(metrics.get('central_bank_damage', 0))} "
+            "in economic damage. This includes malinvestment caused by artificial interest rates, "
+            "purchasing power loss from monetary expansion, and asset bubbles from quantitative easing."
+        )
+
+        pdf.add_subsection("Government Damage")
+        pdf.add_paragraph(
+            f"Government interventions caused {format_currency(metrics.get('government_damage', 0))} "
+            "in economic damage. This includes deadweight loss from taxation, compliance costs from "
+            "regulation, and trade disruption from tariffs and sanctions."
+        )
+
+        total_damage = float(metrics.get('central_bank_damage', 0)) + float(metrics.get('government_damage', 0))
+        damage_data = {
+            'Central Bank Damage': metrics.get('central_bank_damage', 0),
+            'Government Damage': metrics.get('government_damage', 0),
+            'Total Malinvestment': metrics.get('total_malinvestment', 0),
+            'Total Intervention Damage': Decimal(str(total_damage)),
+        }
+        pdf.add_metrics_table("", damage_data, "Intervention damage summary", self._next_table())
+
+    def _add_business_cycle_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add business cycle analysis section"""
+        pdf.add_section("Business Cycle Analysis")
+
+        cycle = summary.get('business_cycle', {})
+
+        if not cycle:
+            pdf.add_paragraph("No business cycle data available.")
+            return
+
+        phase = cycle.get('phase', 'unknown')
+        pdf.add_paragraph(
+            f"The economy is currently in the <b>{phase}</b> phase of the business cycle. "
+            f"Boom intensity is {cycle.get('boom_intensity', 0):.2f}, indicating "
+            f"{'strong expansion' if cycle.get('boom_intensity', 0) > 0.7 else 'moderate activity' if cycle.get('boom_intensity', 0) > 0.4 else 'weak conditions'}. "
+            f"Interest rate distortion is {format_percent(cycle.get('rate_distortion', 0))}, "
+            f"measuring how far current rates are from the natural rate."
+        )
+
+        cycle_data = {
+            'Current Phase': phase.title(),
+            'Boom Intensity': f"{cycle.get('boom_intensity', 0):.2f}",
+            'Rate Distortion': format_percent(cycle.get('rate_distortion', 0)),
+            'Credit Signal': cycle.get('credit_signal', 'unknown').title(),
+            'Investment Signal': cycle.get('investment_signal', 'unknown').title(),
+        }
+        pdf.add_metrics_table("", cycle_data, "Business cycle indicators", self._next_table())
+
+    def _add_dashboard_section(
         self,
         pdf: PDFReportBuilder,
         history: List[Any],
         country: str
     ):
-        """Add price evolution analysis section"""
-        if not history:
-            pdf.add_paragraph("No price history data available.")
-            return
-
-        # Extract price data
-        btc_prices = [m.bitcoin_price for m in history]
-        gold_prices = [m.gold_price for m in history]
-
-        pdf.add_subsection("5.1 Bitcoin Price Evolution")
-        pdf.add_paragraph(
-            "Bitcoin serves as a key indicator of fiat currency debasement. "
-            "As central banks expand the money supply, rational actors move wealth into hard assets. "
-            "Bitcoin's fixed supply (21 million) makes it an ideal measure of dollar purchasing power loss."
-        )
-
-        if self.config.include_charts:
-            btc_chart = self.chart_generator.create_bitcoin_price_chart(
-                btc_prices,
-                f"Bitcoin Price During {country} Simulation"
-            )
-            pdf.add_chart(btc_chart, "Figure: Bitcoin price evolution reflecting monetary conditions", width=5.5, height=2.8)
-
-        pdf.add_subsection("5.2 Gold Price Evolution")
-        pdf.add_paragraph(
-            "Gold remains the traditional inflation hedge with 5,000 years of monetary history. "
-            "Its price movements often precede and predict inflation in consumer goods."
-        )
-
-        if self.config.include_charts:
-            gold_chart = self.chart_generator.create_gold_price_chart(
-                gold_prices,
-                f"Gold Price During {country} Simulation"
-            )
-            pdf.add_chart(gold_chart, "Figure: Gold price evolution as inflation indicator", width=5.5, height=2.8)
-
-        # Price comparison
-        pdf.add_subsection("5.3 Hard Assets vs Fiat Comparison")
-        if self.config.include_charts:
-            comparison_chart = self.chart_generator.create_price_comparison_chart(
-                btc_prices, gold_prices,
-                "Hard Assets Performance (Normalized)"
-            )
-            pdf.add_chart(
-                comparison_chart,
-                "Figure: Comparative performance of Bitcoin and Gold normalized to starting value",
-                width=5.5, height=2.8
-            )
-
-        pdf.add_austrian_note(
-            "The appreciation of hard assets (Bitcoin, Gold) relative to fiat currency is not speculation; "
-            "it is the market correctly pricing the ongoing debasement of government money. "
-            "Holders of fiat currency are being taxed through inflation."
-        )
-
-    def _add_monetary_analysis(
-        self,
-        pdf: PDFReportBuilder,
-        history: List[Any],
-        summary: Dict[str, Any]
-    ):
-        """Add monetary analysis section"""
-        if not history:
-            pdf.add_paragraph("No monetary data available.")
-            return
+        """Add dashboard visualization section"""
+        pdf.add_section("Economic Dashboard")
 
         pdf.add_paragraph(
-            "Austrian Business Cycle Theory (ABCT) explains how central bank manipulation of interest rates "
-            "and money supply causes boom-bust cycles. Credit expansion lowers rates below the natural rate, "
-            "leading to malinvestment in longer-term projects that cannot be completed."
+            "The following dashboard provides a comprehensive view of key economic indicators "
+            "throughout the simulation period."
         )
 
-        # Extract monetary data
-        money_supply = [m.money_supply for m in history]
-        credit = [m.credit_expansion for m in history]
-        inflation = [m.inflation_rate for m in history]
-
-        pdf.add_subsection("6.1 Money Supply and Credit")
-        if self.config.include_charts:
-            money_chart = self.chart_generator.create_money_supply_chart(
-                money_supply, credit,
-                "Money Supply and Credit Expansion"
-            )
-            pdf.add_chart(money_chart, "Figure: Base money and credit expansion showing monetary inflation", width=5.5, height=2.8)
-
-        pdf.add_subsection("6.2 Inflation Rate")
-        if self.config.include_charts:
-            inflation_chart = self.chart_generator.create_inflation_chart(
-                inflation,
-                "Annualized Inflation Rate"
-            )
-            pdf.add_chart(inflation_chart, "Figure: Inflation rate evolution (Austrian calculation)", width=5.5, height=2.8)
-
-        pdf.add_austrian_note(
-            "Inflation is ALWAYS a monetary phenomenon. The central bank creates new money, "
-            "which dilutes the value of existing money. CPI understates true inflation because "
-            "it excludes asset prices and uses substitution bias. Our calculation uses market prices."
+        dashboard_bytes = self.chart_generator.create_simulation_dashboard(
+            history, f"{country} Economic Simulation"
         )
+        pdf.add_chart(dashboard_bytes, "Comprehensive economic dashboard", width=16, height=10, figure_num=self._next_figure())
 
-    def _add_labor_analysis(
-        self,
-        pdf: PDFReportBuilder,
-        history: List[Any],
-        summary: Dict[str, Any]
-    ):
-        """Add labor market analysis section"""
-        if not history:
-            pdf.add_paragraph("No labor market data available.")
-            return
+    # ===========================================
+    # HELPER METHODS - MULTI-COUNTRY SECTIONS
+    # ===========================================
 
-        unemployment = [m.unemployment_rate for m in history]
+    def _add_country_overview_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add country overview section for multi-country report"""
+        pdf.add_section("Country Overview")
+
+        country_data = summary.get('countries', {})
 
         pdf.add_paragraph(
-            "Labor markets clear at the market wage when unimpeded. Government interventions "
-            "(minimum wage, labor regulations, payroll taxes) create unemployment by preventing "
-            "mutually beneficial transactions between employers and workers."
+            f"The simulation includes {len(country_data)} countries with varying regime types "
+            "and intervention levels. Each country operates its own central bank and government, "
+            "with agents responding to local conditions while also engaging in international trade."
         )
 
-        if self.config.include_charts:
-            unemployment_chart = self.chart_generator.create_unemployment_chart(
-                unemployment,
-                "Unemployment Rate Evolution"
-            )
-            pdf.add_chart(unemployment_chart, "Figure: Unemployment rate over simulation period", width=5.5, height=2.8)
+        # Build comparison table
+        headers = ["Country", "Regime", "Freedom", "Inflation", "Unemployment"]
+        rows = []
 
-        # Labor market statistics from summary
-        labor_stats = summary.get('labor_market', {})
-        if labor_stats:
-            pdf.add_metrics_table("Labor Market Statistics", labor_stats)
+        for code, data in country_data.items():
+            regime = data.get('regime', 'N/A')
+            if regime == 'N/A':
+                # Try to get from config
+                regime = 'Mixed'
+            rows.append([
+                code,
+                str(regime).replace('_', ' ').title() if regime else 'N/A',
+                f"{data.get('freedom_index', 0):.0f}",
+                format_percent(data.get('inflation', 0)),
+                format_percent(data.get('unemployment', 0)),
+            ])
 
-        pdf.add_austrian_note(
-            "True unemployment includes underemployment and discouraged workers, "
-            "which government statistics systematically undercount. A free labor market "
-            "with no minimum wage or regulations would clear at the market-determined wage, "
-            "resulting in voluntary unemployment only."
-        )
+        pdf.add_comparison_table(headers, rows, "Overview of simulated countries", self._next_table())
 
-    def _add_business_cycle_analysis(
-        self,
-        pdf: PDFReportBuilder,
-        summary: Dict[str, Any]
-    ):
-        """Add business cycle analysis section"""
-        cycle = summary.get('business_cycle', {})
+    def _add_rankings_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add country rankings section"""
+        pdf.add_section("Comparative Rankings")
 
-        pdf.add_paragraph(
-            "The Austrian Business Cycle Theory explains economic fluctuations as the result of "
-            "central bank credit expansion. When banks create credit not backed by real savings, "
-            "interest rates fall below the natural rate, causing entrepreneurs to undertake projects "
-            "that cannot be completed with available resources."
-        )
-
-        if cycle:
-            cycle_metrics = {
-                'Current Phase': cycle.get('phase', 'unknown').title(),
-                'Boom Intensity': f"{cycle.get('boom_intensity', 0):.2f}",
-                'Rate Distortion': f"{cycle.get('rate_distortion', 0):.2f}",
-                'Credit Signal': cycle.get('credit_signal', 'neutral'),
-                'Investment Signal': cycle.get('investment_signal', 'neutral'),
-            }
-            pdf.add_metrics_table("Business Cycle Indicators", cycle_metrics)
-
-            if cycle.get('recommendation'):
-                pdf.add_paragraph(f"<b>Analysis:</b> {cycle.get('recommendation')}")
-
-        pdf.add_austrian_note(
-            "The bust phase is not a problem to be solved; it is the solution. "
-            "Liquidation of malinvestment frees resources for productive use. "
-            "Government attempts to prevent or delay the bust only prolong the misallocation."
-        )
-
-    def _add_country_rankings(
-        self,
-        pdf: PDFReportBuilder,
-        summary: Dict[str, Any]
-    ):
-        """Add country ranking tables for multi-country report"""
-        countries = summary.get('countries', {})
+        country_data = summary.get('countries', {})
 
         # Freedom ranking
-        sorted_freedom = sorted(
-            countries.items(),
+        sorted_by_freedom = sorted(
+            country_data.items(),
             key=lambda x: x[1].get('freedom_index', 0),
             reverse=True
         )
 
-        pdf.add_subsection("Freedom Index Ranking")
-        freedom_rows = [
-            [str(i+1), c, f"{data.get('freedom_index', 0):.1f}", data.get('regime', 'N/A')]
-            for i, (c, data) in enumerate(sorted_freedom)
-        ]
-        pdf.add_comparison_table(
-            "",
-            ["Rank", "Country", "Freedom Index", "Regime"],
-            freedom_rows,
-            "Table: Countries ranked by economic freedom (higher = freer)"
+        pdf.add_subsection("Economic Freedom Ranking")
+        pdf.add_paragraph(
+            "Countries ranked by economic freedom index, where higher values indicate less "
+            "government intervention and freer markets."
         )
 
-        # Inflation ranking (lower is better)
-        sorted_inflation = sorted(
-            countries.items(),
-            key=lambda x: x[1].get('inflation', float('inf'))
+        freedom_rankings = [(c, f"{data.get('freedom_index', 0):.1f}") for c, data in sorted_by_freedom]
+        pdf.add_ranking_table("", freedom_rankings, "Countries by freedom index", self._next_table())
+
+        # Inflation ranking
+        sorted_by_inflation = sorted(
+            country_data.items(),
+            key=lambda x: x[1].get('inflation', 0)
         )
 
         pdf.add_subsection("Inflation Ranking")
-        inflation_rows = [
-            [str(i+1), c, f"{data.get('inflation', 0):.1%}"]
-            for i, (c, data) in enumerate(sorted_inflation)
-        ]
-        pdf.add_comparison_table(
-            "",
-            ["Rank", "Country", "Inflation Rate"],
-            inflation_rows,
-            "Table: Countries ranked by inflation rate (lower = better)"
+        pdf.add_paragraph("Countries ranked by inflation rate (lower is better).")
+
+        inflation_rankings = [(c, format_percent(data.get('inflation', 0))) for c, data in sorted_by_inflation]
+        pdf.add_ranking_table("", inflation_rankings, "Countries by inflation rate", self._next_table())
+
+    def _add_geopolitical_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add geopolitical analysis section"""
+        pdf.add_section("Geopolitical Analysis")
+
+        war_risks = summary.get('war_risks', [])
+        rel_summary = summary.get('relationship_summary', {})
+
+        pdf.add_paragraph(
+            f"The simulation tracked inter-country relationships including alliances, rivalries, "
+            f"and conflict probabilities. Among the simulated countries, there are "
+            f"{rel_summary.get('allies', 0)} allied pairs, {rel_summary.get('rivals', 0)} rival pairs, "
+            f"and {rel_summary.get('enemies', 0)} enemy pairs."
         )
 
-    def _add_multi_country_charts(
+        if war_risks:
+            pdf.add_subsection("War Risk Assessment")
+            pdf.add_paragraph(
+                "The following country pairs show elevated conflict probability based on "
+                "historical tensions, sanctions, and current relationship dynamics."
+            )
+
+            headers = ["Countries", "Probability", "Risk Level"]
+            rows = []
+            for risk in war_risks[:5]:  # Top 5
+                countries = f"{risk['countries'][0]}-{risk['countries'][1]}"
+                prob = format_percent(risk['probability'])
+                level = "HIGH" if risk['probability'] >= 0.10 else ("MODERATE" if risk['probability'] >= 0.05 else "LOW")
+                rows.append([countries, prob, level])
+
+            pdf.add_comparison_table(headers, rows, "Highest war risk pairs", self._next_table())
+
+            pdf.add_note(
+                "Austrian economics predicts that free trade reduces conflict probability. "
+                "When nations trade freely, war becomes economically costly. Protectionism "
+                "and sanctions increase conflict risk by reducing economic interdependence."
+            )
+        else:
+            pdf.add_paragraph("No significant war risks were detected among the simulated countries.")
+
+    def _add_global_metrics_section(self, pdf: PDFReportBuilder, summary: Dict[str, Any]):
+        """Add global metrics section"""
+        pdf.add_section("Global Economic Metrics")
+
+        global_metrics = summary.get('global_metrics', {})
+
+        pdf.add_paragraph(
+            "Aggregate metrics across all simulated economies provide insight into global "
+            "economic conditions and total intervention damage."
+        )
+
+        formatted_metrics = {
+            'Total GDP': global_metrics.get('total_gdp', 0),
+            'Average Inflation': global_metrics.get('avg_inflation', 0),
+            'Average Freedom Index': f"{global_metrics.get('avg_freedom_index', 0):.1f}",
+            'Total CB Damage': global_metrics.get('total_cb_damage', 0),
+            'Total Gov Damage': global_metrics.get('total_gov_damage', 0),
+            'High War Risk Pairs': global_metrics.get('high_war_risk_pairs', 0),
+        }
+
+        pdf.add_metrics_table("", formatted_metrics, "Aggregate global metrics", self._next_table())
+
+    def _add_evolution_charts_section(
         self,
         pdf: PDFReportBuilder,
         history: List[Any],
         summary: Dict[str, Any]
     ):
-        """Add comparative evolution charts for multi-country report"""
-        if not history:
-            return
+        """Add evolution charts for multi-country report"""
+        pdf.add_section("Comparative Evolution")
+
+        pdf.add_paragraph(
+            "The following charts show how key indicators evolved over time for each country, "
+            "allowing visual comparison of economic trajectories."
+        )
 
         countries = summary.get('config', {}).get('countries', [])
 
@@ -744,61 +680,33 @@ class ReportGenerator:
                     freedom_data[country].append(country_metric.freedom_index)
                     inflation_data[country].append(country_metric.inflation_rate)
 
-        # Freedom evolution chart
         if freedom_data:
             freedom_chart = self.chart_generator.create_multi_country_evolution_chart(
-                freedom_data,
-                "Freedom Index",
-                "Economic Freedom Evolution by Country"
+                freedom_data, "Freedom Index", "Economic Freedom by Country"
             )
-            pdf.add_chart(
-                freedom_chart,
-                "Figure: Evolution of economic freedom across countries",
-                width=6, height=3
-            )
+            pdf.add_chart(freedom_chart, "Freedom index evolution by country", figure_num=self._next_figure())
 
-        # Inflation evolution chart
         if inflation_data:
             inflation_chart = self.chart_generator.create_multi_country_evolution_chart(
-                inflation_data,
-                "Inflation Rate",
-                "Inflation Rate Evolution by Country"
+                inflation_data, "Inflation Rate", "Inflation Rate by Country"
             )
-            pdf.add_chart(
-                inflation_chart,
-                "Figure: Evolution of inflation rates across countries",
-                width=6, height=3
-            )
+            pdf.add_chart(inflation_chart, "Inflation rate evolution by country", figure_num=self._next_figure())
 
 
 # ===========================================
 # CONVENIENCE FUNCTIONS
 # ===========================================
 
-def generate_simulation_report(
-    engine,
-    output_dir: Optional[Path] = None
-) -> Path:
-    """
-    Convenience function to generate a report from a simulation engine.
-
-    Args:
-        engine: SimulationEngine or MultiCountrySimulationEngine
-        output_dir: Optional output directory
-
-    Returns:
-        Path to generated PDF
-    """
+def generate_simulation_report(engine, output_dir: Optional[Path] = None) -> Path:
+    """Convenience function to generate a report from a simulation engine."""
     config = ReportConfig()
     if output_dir:
         config.output_dir = output_dir
 
     generator = ReportGenerator(config)
-
     summary = engine.get_summary()
     history = engine.metrics_history
 
-    # Check if multi-country
     if hasattr(engine, 'country_engines'):
         return generator.generate_multi_country_report(summary, history)
     else:

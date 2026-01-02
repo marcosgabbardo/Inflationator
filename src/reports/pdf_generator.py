@@ -1,14 +1,14 @@
 """
-PDF Report Generator
+PDF Report Generator - Academic Whitepaper Style
 
-Creates professional PDF reports using ReportLab.
-Designed for scientific/academic publication quality.
+Creates professional PDF reports in academic whitepaper format,
+similar to Satoshi Nakamoto's Bitcoin whitepaper.
 """
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
+from reportlab.lib.units import inch, cm, mm
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle,
@@ -16,7 +16,6 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.flowables import HRFlowable
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -25,146 +24,216 @@ from decimal import Decimal
 import io
 
 
+def format_currency(value: Any, decimals: int = 0) -> str:
+    """Format a value as currency"""
+    try:
+        if isinstance(value, Decimal):
+            num = float(value)
+        elif isinstance(value, str):
+            num = float(value.replace(',', ''))
+        else:
+            num = float(value)
+
+        if abs(num) >= 1e12:
+            return f"${num/1e12:,.2f}T"
+        elif abs(num) >= 1e9:
+            return f"${num/1e9:,.2f}B"
+        elif abs(num) >= 1e6:
+            return f"${num/1e6:,.2f}M"
+        elif abs(num) >= 1e3:
+            return f"${num/1e3:,.1f}K"
+        else:
+            return f"${num:,.{decimals}f}"
+    except:
+        return str(value)
+
+
+def format_percent(value: Any, decimals: int = 1) -> str:
+    """Format a value as percentage"""
+    try:
+        num = float(value)
+        if num < 1:  # Already decimal
+            return f"{num*100:.{decimals}f}%"
+        return f"{num:.{decimals}f}%"
+    except:
+        return str(value)
+
+
+def format_number(value: Any, decimals: int = 2) -> str:
+    """Format a number with thousands separator"""
+    try:
+        num = float(value) if not isinstance(value, (int, float)) else value
+        return f"{num:,.{decimals}f}"
+    except:
+        return str(value)
+
+
 class PDFReportBuilder:
     """
-    Builds professional PDF reports for economic simulations.
+    Builds academic-style PDF reports (whitepaper format).
 
-    Features:
-    - Scientific article formatting
-    - Tables for data presentation
-    - Embedded charts
-    - Austrian Economics annotations
+    Design principles:
+    - Clean, minimal formatting
+    - Compact tables
+    - Clear section numbering
+    - Academic references style
     """
 
     def __init__(
         self,
         output_path: Path,
         title: str = "Economic Simulation Report",
-        author: str = "Inflationator Simulation Engine"
+        author: str = "Inflationator"
     ):
         self.output_path = output_path
         self.title = title
         self.author = author
+        self.section_counter = 0
 
-        # Document setup
+        # Document setup - tighter margins for academic style
         self.doc = SimpleDocTemplate(
             str(output_path),
             pagesize=A4,
-            rightMargin=2*cm,
-            leftMargin=2*cm,
-            topMargin=2.5*cm,
-            bottomMargin=2.5*cm,
+            rightMargin=2.5*cm,
+            leftMargin=2.5*cm,
+            topMargin=2*cm,
+            bottomMargin=2*cm,
         )
 
         # Styles
         self.styles = getSampleStyleSheet()
-        self._setup_custom_styles()
+        self._setup_academic_styles()
 
         # Content elements
         self.elements: List[Any] = []
 
-    def _setup_custom_styles(self):
-        """Setup custom paragraph styles for scientific formatting"""
-        # Title style
+    def _setup_academic_styles(self):
+        """Setup academic/whitepaper paragraph styles"""
+
+        # Title - centered, bold
         self.styles.add(ParagraphStyle(
-            name='ReportTitle',
-            parent=self.styles['Heading1'],
-            fontSize=24,
-            spaceAfter=30,
+            name='PaperTitle',
+            parent=self.styles['Title'],
+            fontSize=18,
+            spaceAfter=6,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#1a1a2e'),
+            textColor=colors.black,
+            fontName='Times-Bold',
         ))
 
-        # Subtitle style
+        # Author/subtitle
         self.styles.add(ParagraphStyle(
-            name='ReportSubtitle',
+            name='PaperAuthor',
             parent=self.styles['Normal'],
-            fontSize=12,
-            spaceAfter=20,
+            fontSize=11,
+            spaceAfter=4,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#4a4a4a'),
-            fontName='Helvetica-Oblique',
+            textColor=colors.HexColor('#333333'),
+            fontName='Times-Roman',
         ))
 
-        # Section heading
+        # Abstract title
+        self.styles.add(ParagraphStyle(
+            name='AbstractTitle',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            spaceBefore=12,
+            spaceAfter=4,
+            alignment=TA_CENTER,
+            fontName='Times-Bold',
+        ))
+
+        # Abstract text - indented, italic
+        self.styles.add(ParagraphStyle(
+            name='Abstract',
+            parent=self.styles['Normal'],
+            fontSize=9,
+            alignment=TA_JUSTIFY,
+            leftIndent=1.5*cm,
+            rightIndent=1.5*cm,
+            spaceAfter=12,
+            leading=12,
+            fontName='Times-Italic',
+        ))
+
+        # Section heading (numbered)
         self.styles.add(ParagraphStyle(
             name='SectionHeading',
             parent=self.styles['Heading2'],
-            fontSize=14,
-            spaceBefore=20,
-            spaceAfter=12,
-            textColor=colors.HexColor('#1a1a2e'),
-            borderWidth=1,
-            borderColor=colors.HexColor('#1f77b4'),
-            borderPadding=5,
+            fontSize=11,
+            spaceBefore=14,
+            spaceAfter=6,
+            textColor=colors.black,
+            fontName='Times-Bold',
         ))
 
         # Subsection heading
         self.styles.add(ParagraphStyle(
             name='SubsectionHeading',
             parent=self.styles['Heading3'],
-            fontSize=12,
-            spaceBefore=15,
-            spaceAfter=8,
-            textColor=colors.HexColor('#2a2a3e'),
+            fontSize=10,
+            spaceBefore=10,
+            spaceAfter=4,
+            textColor=colors.black,
+            fontName='Times-Bold',
         ))
 
-        # Body text (justified)
+        # Body text - justified, Times font
         self.styles.add(ParagraphStyle(
-            name='BodyJustified',
+            name='AcademicBody',
             parent=self.styles['Normal'],
             fontSize=10,
             alignment=TA_JUSTIFY,
-            spaceAfter=8,
-            leading=14,
+            spaceAfter=6,
+            leading=12,
+            fontName='Times-Roman',
         ))
 
-        # Austrian theory note (italics, gray)
+        # Note/annotation style
         self.styles.add(ParagraphStyle(
-            name='AustrianNote',
+            name='Note',
             parent=self.styles['Normal'],
             fontSize=9,
-            fontName='Helvetica-Oblique',
-            textColor=colors.HexColor('#666666'),
-            leftIndent=20,
+            fontName='Times-Italic',
+            textColor=colors.HexColor('#444444'),
+            leftIndent=0.5*cm,
+            spaceAfter=8,
+            spaceBefore=4,
+        ))
+
+        # Table caption
+        self.styles.add(ParagraphStyle(
+            name='TableCaption',
+            parent=self.styles['Normal'],
+            fontSize=9,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#333333'),
+            fontName='Times-Italic',
+            spaceBefore=4,
             spaceAfter=10,
-            spaceBefore=5,
-            backColor=colors.HexColor('#f5f5f5'),
-            borderWidth=0,
-            borderPadding=8,
         ))
 
-        # Metric value (bold)
+        # Figure caption
         self.styles.add(ParagraphStyle(
-            name='MetricValue',
-            parent=self.styles['Normal'],
-            fontSize=11,
-            fontName='Helvetica-Bold',
-            alignment=TA_CENTER,
-        ))
-
-        # Caption style
-        self.styles.add(ParagraphStyle(
-            name='Caption',
+            name='FigureCaption',
             parent=self.styles['Normal'],
             fontSize=9,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#4a4a4a'),
-            fontName='Helvetica-Oblique',
-            spaceBefore=5,
-            spaceAfter=15,
+            textColor=colors.HexColor('#333333'),
+            fontName='Times-Italic',
+            spaceBefore=4,
+            spaceAfter=8,
         ))
 
-        # Abstract style
+        # Reference style
         self.styles.add(ParagraphStyle(
-            name='Abstract',
+            name='Reference',
             parent=self.styles['Normal'],
-            fontSize=10,
-            alignment=TA_JUSTIFY,
-            leftIndent=30,
-            rightIndent=30,
-            spaceAfter=20,
-            leading=14,
+            fontSize=9,
+            fontName='Times-Roman',
+            leftIndent=0.5*cm,
+            firstLineIndent=-0.5*cm,
+            spaceAfter=3,
         ))
 
     # ===========================================
@@ -176,483 +245,339 @@ class PDFReportBuilder:
         title: str,
         subtitle: str,
         date: Optional[datetime] = None,
-        country: Optional[str] = None,
-        regime: Optional[str] = None
+        author: str = "Inflationator Economic Simulator",
+        email: str = "simulation@inflationator.io"
     ):
-        """Add a title page with simulation info"""
+        """Add academic-style title section (not full page)"""
         date = date or datetime.now()
 
-        # Main title
-        self.elements.append(Spacer(1, 2*inch))
-        self.elements.append(Paragraph(title, self.styles['ReportTitle']))
+        # Title
+        self.elements.append(Paragraph(title, self.styles['PaperTitle']))
 
         # Subtitle
-        self.elements.append(Paragraph(subtitle, self.styles['ReportSubtitle']))
+        if subtitle:
+            self.elements.append(Paragraph(subtitle, self.styles['PaperAuthor']))
 
-        # Spacer
-        self.elements.append(Spacer(1, 0.5*inch))
+        # Author and date
+        self.elements.append(Spacer(1, 0.3*cm))
+        self.elements.append(Paragraph(author, self.styles['PaperAuthor']))
+        self.elements.append(Paragraph(email, self.styles['PaperAuthor']))
+        self.elements.append(Paragraph(date.strftime("%B %d, %Y"), self.styles['PaperAuthor']))
 
-        # Simulation metadata
-        meta_data = [
-            ["Simulation Date:", date.strftime("%B %d, %Y")],
-            ["Generated by:", "Inflationator - Austrian Economics Simulator"],
-        ]
-        if country:
-            meta_data.append(["Country:", country])
-        if regime:
-            meta_data.append(["Regime Type:", regime])
-
-        meta_table = Table(meta_data, colWidths=[2*inch, 3*inch])
-        meta_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        self.elements.append(meta_table)
-
-        # Austrian economics note at bottom
-        self.elements.append(Spacer(1, 2*inch))
-        self.elements.append(Paragraph(
-            "This simulation is based on Austrian Economics principles (Mises, Hayek, Rothbard). "
-            "All interventions are tracked for their true economic cost.",
-            self.styles['AustrianNote']
-        ))
-
-        self.elements.append(PageBreak())
+        self.elements.append(Spacer(1, 0.5*cm))
 
     def add_abstract(self, text: str):
-        """Add an abstract section"""
-        self.elements.append(Paragraph("Abstract", self.styles['SectionHeading']))
+        """Add abstract section"""
+        self.elements.append(Paragraph("<b>Abstract.</b>", self.styles['AbstractTitle']))
         self.elements.append(Paragraph(text, self.styles['Abstract']))
-        self.elements.append(Spacer(1, 0.3*inch))
+        self.elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.gray, spaceAfter=10))
 
     def add_section(self, title: str, content: Optional[str] = None):
-        """Add a new section with heading"""
-        self.elements.append(Paragraph(title, self.styles['SectionHeading']))
+        """Add a numbered section"""
+        self.section_counter += 1
+        section_title = f"{self.section_counter}. {title}"
+        self.elements.append(Paragraph(section_title, self.styles['SectionHeading']))
         if content:
-            self.elements.append(Paragraph(content, self.styles['BodyJustified']))
+            self.elements.append(Paragraph(content, self.styles['AcademicBody']))
 
     def add_subsection(self, title: str, content: Optional[str] = None):
-        """Add a subsection"""
+        """Add a subsection (not numbered)"""
         self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
         if content:
-            self.elements.append(Paragraph(content, self.styles['BodyJustified']))
+            self.elements.append(Paragraph(content, self.styles['AcademicBody']))
 
     def add_paragraph(self, text: str):
         """Add a body paragraph"""
-        self.elements.append(Paragraph(text, self.styles['BodyJustified']))
+        self.elements.append(Paragraph(text, self.styles['AcademicBody']))
 
-    def add_austrian_note(self, text: str):
-        """Add an Austrian Economics explanation note"""
-        self.elements.append(Paragraph(
-            f"<b>Austrian Economics Note:</b> {text}",
-            self.styles['AustrianNote']
-        ))
+    def add_note(self, text: str):
+        """Add an annotation/note"""
+        self.elements.append(Paragraph(text, self.styles['Note']))
 
-    def add_spacer(self, height: float = 0.2):
-        """Add vertical space (in inches)"""
-        self.elements.append(Spacer(1, height*inch))
+    def add_spacer(self, height: float = 0.3):
+        """Add vertical space (in cm)"""
+        self.elements.append(Spacer(1, height*cm))
 
     def add_page_break(self):
         """Add a page break"""
         self.elements.append(PageBreak())
 
     def add_horizontal_line(self):
-        """Add a horizontal divider line"""
+        """Add a thin horizontal line"""
         self.elements.append(HRFlowable(
             width="100%",
-            thickness=1,
-            color=colors.HexColor('#cccccc'),
-            spaceBefore=10,
-            spaceAfter=10
+            thickness=0.5,
+            color=colors.gray,
+            spaceBefore=6,
+            spaceAfter=6
         ))
 
     # ===========================================
-    # TABLES
+    # TABLES - COMPACT ACADEMIC STYLE
     # ===========================================
 
     def add_metrics_table(
         self,
         title: str,
         metrics: Dict[str, Any],
-        caption: Optional[str] = None
+        caption: Optional[str] = None,
+        table_num: Optional[int] = None
     ):
-        """Add a metrics summary table"""
-        self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
+        """Add a compact metrics table"""
 
-        # Convert metrics to table data
-        data = [["Metric", "Value"]]
+        # Convert metrics to formatted table data
+        data = []
         for key, value in metrics.items():
-            # Format key
             key_formatted = key.replace('_', ' ').title()
 
-            # Format value
-            if isinstance(value, float):
-                if 'rate' in key.lower() or 'index' in key.lower():
-                    value_formatted = f"{value:.2%}" if value < 1 else f"{value:.1f}"
+            # Smart formatting based on key name
+            if any(x in key.lower() for x in ['damage', 'gdp', 'price', 'supply', 'money', 'cost']):
+                value_formatted = format_currency(value)
+            elif any(x in key.lower() for x in ['rate', 'inflation', 'unemployment', 'index']):
+                if isinstance(value, (int, float)) and value < 1:
+                    value_formatted = format_percent(value)
                 else:
-                    value_formatted = f"{value:,.2f}"
-            elif isinstance(value, Decimal):
-                value_formatted = f"${float(value):,.0f}"
+                    value_formatted = format_number(value, 1)
             else:
-                value_formatted = str(value)
+                value_formatted = str(value) if not isinstance(value, float) else format_number(value, 2)
 
             data.append([key_formatted, value_formatted])
 
-        table = Table(data, colWidths=[3*inch, 2.5*inch])
+        if not data:
+            return
+
+        # Create compact table
+        table = Table(data, colWidths=[7*cm, 5*cm])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f77b4')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8f8f8')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-            ('TOPPADDING', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LINEBELOW', (0, 0), (-1, -2), 0.5, colors.HexColor('#cccccc')),
+            ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
+            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
         ]))
 
         self.elements.append(table)
 
         if caption:
-            self.elements.append(Paragraph(caption, self.styles['Caption']))
-
-        self.elements.append(Spacer(1, 0.2*inch))
+            cap_text = f"Table {table_num}: {caption}" if table_num else caption
+            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
 
     def add_comparison_table(
         self,
-        title: str,
         headers: List[str],
         rows: List[List[str]],
-        caption: Optional[str] = None
+        caption: Optional[str] = None,
+        table_num: Optional[int] = None
     ):
-        """Add a comparison table (e.g., for multi-country)"""
-        self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
+        """Add a compact comparison table with headers"""
 
         data = [headers] + rows
 
-        # Calculate column widths based on number of columns
+        # Calculate column widths
         num_cols = len(headers)
-        col_width = (6.5*inch) / num_cols
+        col_width = (16*cm) / num_cols
 
         table = Table(data, colWidths=[col_width] * num_cols)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f77b4')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            # Header styling
+            ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+
+            # Body styling
+            ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
         ]))
 
         self.elements.append(table)
 
         if caption:
-            self.elements.append(Paragraph(caption, self.styles['Caption']))
+            cap_text = f"Table {table_num}: {caption}" if table_num else caption
+            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
 
-        self.elements.append(Spacer(1, 0.2*inch))
-
-    def add_damage_summary_table(
+    def add_ranking_table(
         self,
-        cb_damage: Dict[str, Any],
-        gov_damage: Dict[str, Any]
+        title: str,
+        rankings: List[tuple],
+        caption: Optional[str] = None,
+        table_num: Optional[int] = None
     ):
-        """Add intervention damage summary table"""
-        self.add_section("Intervention Damage Assessment")
+        """Add a compact ranking table (rank, name, value)"""
 
-        self.add_austrian_note(
-            "Every government and central bank intervention creates deadweight loss, "
-            "distorts price signals, and causes malinvestment. This table quantifies the damage."
-        )
+        data = [["#", "Country", "Value"]]
+        for i, (name, value) in enumerate(rankings, 1):
+            data.append([str(i), name, value])
 
-        # Central Bank damage
-        self.add_subsection("Central Bank Damage")
-        data = [["Damage Type", "Amount (USD)", "Description"]]
-        for key, value in cb_damage.items():
-            if key not in ['total', 'recommendation']:
-                desc = self._get_damage_description(key, "cb")
-                amount = f"${float(value):,.0f}" if isinstance(value, (Decimal, float, int)) else str(value)
-                data.append([key.replace('_', ' ').title(), amount, desc])
+        table = Table(data, colWidths=[1*cm, 4*cm, 4*cm])
+        table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.5, colors.black),
+        ]))
 
-        if len(data) > 1:
-            table = Table(data, colWidths=[1.8*inch, 1.5*inch, 3*inch])
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc143c')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (1, -1), 'CENTER'),
-                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff0f0')]),
-            ]))
-            self.elements.append(table)
+        if title:
+            self.elements.append(Paragraph(f"<b>{title}</b>", self.styles['SubsectionHeading']))
 
-        # Government damage
-        self.add_subsection("Government Damage")
-        data = [["Damage Type", "Amount (USD)", "Description"]]
-        for key, value in gov_damage.items():
-            if key not in ['total', 'recommendation']:
-                desc = self._get_damage_description(key, "gov")
-                amount = f"${float(value):,.0f}" if isinstance(value, (Decimal, float, int)) else str(value)
-                data.append([key.replace('_', ' ').title(), amount, desc])
+        self.elements.append(table)
 
-        if len(data) > 1:
-            table = Table(data, colWidths=[1.8*inch, 1.5*inch, 3*inch])
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ff7f0e')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (1, -1), 'CENTER'),
-                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff8f0')]),
-            ]))
-            self.elements.append(table)
-
-    def _get_damage_description(self, damage_type: str, source: str) -> str:
-        """Get explanation for damage type"""
-        descriptions = {
-            "cb": {
-                "malinvestment": "Capital allocated to unsustainable projects due to artificial rates",
-                "inflation_tax": "Hidden tax on savers through currency debasement",
-                "purchasing_power_loss": "Real value destroyed by money printing",
-                "asset_bubble": "Price distortions in financial assets",
-                "boom_bust": "Economic instability from credit cycles",
-            },
-            "gov": {
-                "deadweight_loss": "Economic value destroyed by taxation",
-                "compliance_costs": "Resources wasted on bureaucracy",
-                "trade_disruption": "Value destroyed by tariffs/sanctions",
-                "capital_destroyed": "Physical capital destroyed by regulations",
-                "spending_waste": "Inefficient government spending",
-            }
-        }
-        return descriptions.get(source, {}).get(damage_type.lower(), "Economic distortion")
+        if caption:
+            cap_text = f"Table {table_num}: {caption}" if table_num else caption
+            self.elements.append(Paragraph(cap_text, self.styles['TableCaption']))
 
     # ===========================================
-    # CHARTS AND IMAGES
+    # CHARTS AND FIGURES
     # ===========================================
 
     def add_chart(
         self,
         chart_bytes: bytes,
         caption: str,
-        width: float = 6,
-        height: Optional[float] = None
+        width: float = 14,
+        height: float = 7,
+        figure_num: Optional[int] = None
     ):
-        """Add a chart image to the report"""
-        # Create image from bytes
+        """Add a chart/figure with caption"""
         img_buffer = io.BytesIO(chart_bytes)
 
-        # Default height based on typical chart aspect ratio (16:9 or 4:3)
-        if height is None:
-            height = width * 0.5  # 2:1 aspect ratio for most charts
+        # Convert cm to points
+        img = Image(img_buffer, width=width*cm, height=height*cm)
 
-        img = Image(img_buffer, width=width*inch, height=height*inch)
+        # Center the image
+        self.elements.append(Spacer(1, 0.3*cm))
+        self.elements.append(img)
 
-        # Keep chart and caption together
-        elements = [
-            img,
-            Paragraph(caption, self.styles['Caption'])
-        ]
-        self.elements.append(KeepTogether(elements))
-        self.elements.append(Spacer(1, 0.1*inch))
+        cap_text = f"Figure {figure_num}: {caption}" if figure_num else f"Figure: {caption}"
+        self.elements.append(Paragraph(cap_text, self.styles['FigureCaption']))
 
     def add_dashboard(
         self,
         dashboard_bytes: bytes,
-        caption: str = "Simulation Dashboard: Key Economic Indicators"
+        caption: str = "Economic simulation dashboard showing key indicators"
     ):
         """Add the full simulation dashboard"""
-        self.add_section("Economic Dashboard")
-        self.add_chart(dashboard_bytes, caption, width=6.5, height=4.5)
+        self.add_chart(dashboard_bytes, caption, width=16, height=10)
 
     # ===========================================
     # LISTS
     # ===========================================
 
-    def add_bullet_list(self, items: List[str], title: Optional[str] = None):
-        """Add a bulleted list"""
-        if title:
-            self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
+    def add_bullet_list(self, items: List[str]):
+        """Add a simple bullet list"""
+        for item in items:
+            self.elements.append(Paragraph(f"• {item}", self.styles['AcademicBody']))
 
-        bullet_items = [
-            ListItem(Paragraph(item, self.styles['BodyJustified']))
-            for item in items
-        ]
-        self.elements.append(ListFlowable(
-            bullet_items,
-            bulletType='bullet',
-            start='bulletchar',
-        ))
-        self.elements.append(Spacer(1, 0.1*inch))
-
-    def add_numbered_list(self, items: List[str], title: Optional[str] = None):
+    def add_numbered_list(self, items: List[str]):
         """Add a numbered list"""
-        if title:
-            self.elements.append(Paragraph(title, self.styles['SubsectionHeading']))
-
-        numbered_items = [
-            ListItem(Paragraph(item, self.styles['BodyJustified']))
-            for item in items
-        ]
-        self.elements.append(ListFlowable(
-            numbered_items,
-            bulletType='1',
-        ))
-        self.elements.append(Spacer(1, 0.1*inch))
+        for i, item in enumerate(items, 1):
+            self.elements.append(Paragraph(f"[{i}] {item}", self.styles['Reference']))
 
     # ===========================================
     # SPECIALIZED SECTIONS
     # ===========================================
 
-    def add_initial_conditions_section(
-        self,
-        conditions: Dict[str, Any],
-        country: str
-    ):
-        """Add section describing initial economic conditions"""
-        self.add_section("Initial Economic Conditions")
+    def add_methodology_section(self):
+        """Add methodology explanation"""
+        self.add_section("Methodology")
 
         self.add_paragraph(
-            f"The simulation for {country} began with the following real-world economic conditions, "
-            "fetched from private market data sources (no government statistics):"
+            "This simulation employs agent-based modeling within an Austrian Economics framework. "
+            "Individual agents (persons, companies, banks) make decisions based on subjective value theory, "
+            "time preference, and price signals. The central bank and government act as exogenous "
+            "intervention sources whose damage is tracked throughout the simulation."
         )
 
-        # Key metrics table
-        initial_metrics = {
-            'Bitcoin Price': conditions.get('btc_price', 'N/A'),
-            'Gold Price': conditions.get('gold_price', 'N/A'),
-            'S&P 500': conditions.get('sp500', 'N/A'),
-            'VIX (Fear Index)': conditions.get('vix', 'N/A'),
-            'Dollar Index (DXY)': conditions.get('dxy', 'N/A'),
-            '10Y Treasury Yield': f"{conditions.get('treasury_10y', 'N/A')}%",
-            'Market Sentiment': conditions.get('sentiment', 'N/A'),
-            'Inflation Estimate': f"{conditions.get('inflation_estimate', 'N/A')}%",
-            'Recession Probability': f"{conditions.get('recession_prob', 'N/A')}%",
-        }
-
-        self.add_metrics_table("Initial Market Conditions", initial_metrics)
-
-        self.add_austrian_note(
-            "Initial prices are derived from market data, not government statistics. "
-            "Austrian economists recognize that prices contain distributed knowledge (Hayek) "
-            "and government statistics systematically understate true inflation."
+        self.add_subsection("Agent Behavior")
+        self.add_paragraph(
+            "Agents follow praxeological principles: they act purposefully to achieve subjective goals, "
+            "demonstrate time preference (preferring present goods to future goods), and respond to "
+            "price signals as information carriers. Credit expansion by banks follows fractional reserve "
+            "mechanics, creating the conditions for business cycles as described by Mises and Hayek."
         )
 
-    def add_simulation_config_section(
-        self,
-        config: Dict[str, Any]
-    ):
-        """Add section describing simulation configuration"""
-        self.add_section("Simulation Configuration")
-
-        config_metrics = {
-            'Country': config.get('country', 'USA'),
-            'Number of Persons': f"{config.get('num_persons', 0):,}",
-            'Number of Companies': f"{config.get('num_companies', 0):,}",
-            'Number of Banks': f"{config.get('num_banks', 0):,}",
-            'Regime Type': config.get('regime', 'Unknown'),
-            'Simulation Duration': f"{config.get('ticks', 12)} months",
-            'Central Bank Intervention': f"{config.get('cb_intervention', 0.5):.0%}",
-        }
-
-        self.add_metrics_table("Simulation Parameters", config_metrics)
-
-    def add_austrian_theory_section(self):
-        """Add a section explaining the Austrian Economics framework"""
-        self.add_section("Theoretical Framework: Austrian Economics")
+    def add_austrian_framework_section(self):
+        """Add theoretical framework section"""
+        self.add_section("Theoretical Framework")
 
         self.add_paragraph(
-            "This simulation is built upon the principles of the Austrian School of Economics, "
-            "as developed by Ludwig von Mises, Friedrich Hayek, Murray Rothbard, and Hans-Hermann Hoppe."
+            "The simulation is built on Austrian School principles, particularly the contributions of "
+            "Ludwig von Mises, Friedrich Hayek, and Murray Rothbard. Key theoretical foundations include:"
         )
 
-        principles = [
-            "<b>Subjective Value Theory:</b> Value is determined by individual preferences, not labor or intrinsic properties.",
-            "<b>Praxeology:</b> Economic laws are derived from the logic of human action, not empirical statistics.",
-            "<b>Business Cycle Theory:</b> Credit expansion by central banks causes artificial booms followed by inevitable busts.",
-            "<b>Price Signals:</b> Free market prices coordinate economic activity; intervention distorts these signals.",
-            "<b>Time Preference:</b> Individuals prefer present goods to future goods; savings rate reflects societal time preference.",
-            "<b>Sound Money:</b> Money should emerge from the market (gold, bitcoin); fiat money enables inflation.",
+        points = [
+            "<b>Subjective Value Theory:</b> All value is determined by individual preferences, not intrinsic properties or labor inputs.",
+            "<b>Austrian Business Cycle Theory:</b> Credit expansion artificially lowers interest rates below the natural rate, leading to malinvestment in higher-order capital goods.",
+            "<b>Economic Calculation:</b> Prices serve as essential signals for resource allocation; intervention distorts these signals.",
+            "<b>Time Preference:</b> The ratio at which individuals value present goods over future goods determines the natural interest rate.",
+            "<b>Spontaneous Order:</b> Complex economic coordination emerges from individual actions without central planning."
         ]
 
-        self.add_bullet_list(principles, "Core Principles")
-
-        self.add_austrian_note(
-            "Unlike mainstream (Keynesian) economics, Austrian economics recognizes that all government "
-            "and central bank intervention creates economic distortions and destroys value. "
-            "This simulation quantifies that damage."
-        )
+        for point in points:
+            self.add_paragraph(point)
 
     def add_conclusions_section(
         self,
         freedom_index: float,
-        total_damage: Decimal,
-        recommendation: str
+        total_damage: Any,
+        best_country: Optional[str] = None,
+        worst_country: Optional[str] = None
     ):
         """Add conclusions section"""
-        self.add_section("Conclusions and Recommendations")
+        self.add_section("Conclusions")
 
-        # Freedom assessment
-        if freedom_index >= 90:
-            assessment = "Excellent - Near-optimal free market conditions"
-            color = "green"
-        elif freedom_index >= 70:
-            assessment = "Good - Some intervention, but manageable"
-            color = "blue"
-        elif freedom_index >= 50:
-            assessment = "Moderate - Significant intervention affecting economy"
-            color = "orange"
-        elif freedom_index >= 30:
-            assessment = "Poor - Heavy intervention distorting markets"
-            color = "red"
+        if best_country and worst_country:
+            self.add_paragraph(
+                f"The simulation results demonstrate significant variance in economic outcomes based on "
+                f"regime type and intervention levels. {best_country} achieved the highest economic freedom "
+                f"index ({freedom_index:.1f}), while {worst_country} showed the lowest freedom levels. "
+                f"Total intervention damage across all countries reached {format_currency(total_damage)}."
+            )
         else:
-            assessment = "Critical - Extreme intervention destroying economy"
-            color = "darkred"
+            self.add_paragraph(
+                f"The simulation achieved a freedom index of {freedom_index:.1f}/100, with total "
+                f"intervention damage of {format_currency(total_damage)}. These results align with "
+                f"Austrian predictions: intervention creates deadweight loss and distorts price signals."
+            )
 
         self.add_paragraph(
-            f"<b>Freedom Index: {freedom_index:.1f}/100</b> - {assessment}"
-        )
-
-        self.add_paragraph(
-            f"<b>Total Intervention Damage:</b> ${float(total_damage):,.0f}"
-        )
-
-        self.add_paragraph(f"<b>Recommendation:</b> {recommendation}")
-
-        self.add_austrian_note(
-            "The path to prosperity is through reduced intervention: lower taxes, "
-            "sound money, free trade, and respect for private property. "
-            "Every step toward the free market creates value; every step toward intervention destroys it."
+            "The data consistently supports the Austrian thesis that economic freedom correlates "
+            "positively with prosperity indicators, while government and central bank intervention "
+            "correlates with economic destruction and malinvestment."
         )
 
     def add_references_section(self):
-        """Add references to Austrian Economics literature"""
+        """Add academic references"""
         self.add_section("References")
 
         references = [
-            "Mises, Ludwig von. <i>Human Action: A Treatise on Economics</i> (1949)",
-            "Hayek, Friedrich A. <i>Prices and Production</i> (1931)",
-            "Rothbard, Murray N. <i>Man, Economy, and State</i> (1962)",
-            "Rothbard, Murray N. <i>America's Great Depression</i> (1963)",
-            "Hoppe, Hans-Hermann. <i>Democracy: The God That Failed</i> (2001)",
-            "Hazlitt, Henry. <i>Economics in One Lesson</i> (1946)",
-            "Menger, Carl. <i>Principles of Economics</i> (1871)",
+            "Mises, L. v. (1949). <i>Human Action: A Treatise on Economics</i>. Yale University Press.",
+            "Hayek, F. A. (1931). <i>Prices and Production</i>. Routledge.",
+            "Rothbard, M. N. (1962). <i>Man, Economy, and State</i>. Van Nostrand.",
+            "Rothbard, M. N. (1963). <i>America's Great Depression</i>. Van Nostrand.",
+            "Hoppe, H. H. (2001). <i>Democracy: The God That Failed</i>. Transaction Publishers.",
+            "Hazlitt, H. (1946). <i>Economics in One Lesson</i>. Harper & Brothers.",
+            "Menger, C. (1871). <i>Grundsätze der Volkswirtschaftslehre</i>. Wilhelm Braumüller.",
         ]
 
         self.add_numbered_list(references)

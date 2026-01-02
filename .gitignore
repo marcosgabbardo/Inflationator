@@ -61,6 +61,6 @@ data/cache/
 data/raw/
 data/processed/
 
-# Generated reports
-reports/
-test_reports/
+# Generated reports (output directory, not source code)
+/reports/
+/test_reports/
