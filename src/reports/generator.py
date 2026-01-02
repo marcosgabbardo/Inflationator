@@ -101,10 +101,20 @@ class ReportGenerator:
             "The simulation quantifies these distortions as 'damage' - value destroyed through "
             "misallocation of resources, deadweight loss, and malinvestment."
         )
+        pdf.add_paragraph(
+            "The theoretical foundation draws from the Austrian School of Economics, particularly "
+            "the works of Ludwig von Mises on business cycles, Friedrich Hayek on knowledge and prices, "
+            "Murray Rothbard on central banking, and Hans-Hermann Hoppe on political regimes. "
+            "This simulation provides empirical support for their theoretical predictions."
+        )
 
         # Methodology
         if self.config.include_methodology:
             pdf.add_methodology_section()
+
+        # Theoretical Framework
+        if self.config.include_theory_section:
+            pdf.add_austrian_framework_section()
 
         # Simulation Parameters
         self._add_parameters_section(pdf, simulation_summary)
@@ -124,12 +134,45 @@ class ReportGenerator:
         # Business Cycle
         self._add_business_cycle_section(pdf, simulation_summary)
 
-        # Dashboard (if charts enabled)
+        # ===== AUSTRIAN THEORY SECTIONS =====
+        final_metrics = metrics_history[-1] if metrics_history else None
+        metrics = simulation_summary.get('metrics', {})
+        business_cycle = simulation_summary.get('business_cycle', {})
+
+        # Hayek - Knowledge and Prices
+        if self.config.include_austrian_notes:
+            inflation_rate = metrics.get('inflation_rate', 0)
+            pdf.add_hayek_section(inflation_rate)
+
+        # Rothbard - Central Bank Damage
+        if self.config.include_austrian_notes:
+            cb_damage = float(metrics.get('central_bank_damage', 0))
+            pdf.add_rothbard_section(cb_damage)
+
+        # Hoppe - Regime Analysis
+        if self.config.include_austrian_notes:
+            freedom_index = metrics.get('freedom_index', 50)
+            gov_damage = float(metrics.get('government_damage', 0))
+            pdf.add_hoppe_section(regime, freedom_index, gov_damage)
+
+        # Mises - Business Cycle
+        if self.config.include_austrian_notes and business_cycle:
+            phase = business_cycle.get('phase', 'unknown')
+            rate_distortion = business_cycle.get('rate_distortion', 0)
+            pdf.add_mises_section(phase, rate_distortion)
+
+        # Bitcoin Analysis
+        if self.config.include_austrian_notes and final_metrics:
+            btc_price = float(final_metrics.bitcoin_price)
+            initial_btc = float(metrics_history[0].bitcoin_price) if metrics_history else btc_price
+            btc_change = (btc_price - initial_btc) / initial_btc if initial_btc > 0 else 0
+            pdf.add_bitcoin_analysis_section(btc_price, btc_change)
+
+        # Dashboard and Additional Charts
         if self.config.include_charts and metrics_history:
-            self._add_dashboard_section(pdf, metrics_history, country)
+            self._add_comprehensive_charts_section(pdf, metrics_history, simulation_summary, country)
 
         # Conclusions
-        final_metrics = metrics_history[-1] if metrics_history else None
         freedom_index = final_metrics.freedom_index if final_metrics else 50
         total_damage = (
             (final_metrics.central_bank_damage if final_metrics else Decimal("0")) +
@@ -520,6 +563,165 @@ class ReportGenerator:
         )
         pdf.add_chart(dashboard_bytes, "Comprehensive economic dashboard", width=16, height=10, figure_num=self._next_figure())
 
+    def _add_comprehensive_charts_section(
+        self,
+        pdf: PDFReportBuilder,
+        history: List[Any],
+        summary: Dict[str, Any],
+        country: str
+    ):
+        """Add comprehensive charts section for single-country report"""
+
+        # Extract data
+        btc_prices = [float(m.bitcoin_price) for m in history]
+        gold_prices = [float(m.gold_price) for m in history]
+        inflation_rates = [m.inflation_rate for m in history]
+        unemployment_rates = [m.unemployment_rate for m in history]
+        freedom_indices = [m.freedom_index for m in history]
+        cb_damage = [float(m.central_bank_damage) for m in history]
+        gov_damage = [float(m.government_damage) for m in history]
+        money_supply = [m.money_supply for m in history]
+        credit_expansion = [m.credit_expansion for m in history]
+
+        # ===========================================
+        # SECTION: COMPREHENSIVE DASHBOARD
+        # ===========================================
+        pdf.add_section("Comprehensive Dashboard")
+        pdf.add_paragraph(
+            "The following dashboard provides a visual overview of all key economic indicators "
+            "tracked during the simulation, allowing pattern recognition across multiple metrics."
+        )
+
+        dashboard = self.chart_generator.create_simulation_dashboard(history, f"{country} Economic Simulation")
+        pdf.add_chart(dashboard, "Six-panel economic dashboard", width=16, height=10, figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: HARD ASSETS EVOLUTION
+        # ===========================================
+        pdf.add_section("Hard Asset Performance")
+        pdf.add_paragraph(
+            "Bitcoin and gold serve as 'economic truth detectors' - their prices in fiat currency "
+            "reveal the true extent of monetary debasement. When priced in sound money, real economic "
+            "activity becomes visible free from central bank distortion."
+        )
+
+        # Price comparison chart
+        if len(btc_prices) > 1 and len(gold_prices) > 1:
+            comparison = self.chart_generator.create_price_comparison_chart(
+                [Decimal(str(p)) for p in btc_prices],
+                [Decimal(str(p)) for p in gold_prices],
+                "Hard Asset Performance (Indexed to 100)"
+            )
+            pdf.add_chart(comparison, "Bitcoin and Gold performance indexed to starting value", figure_num=self._next_figure())
+
+        # Bitcoin chart
+        btc_chart = self.chart_generator.create_bitcoin_price_chart(
+            [Decimal(str(p)) for p in btc_prices], f"Bitcoin Price Evolution ({country})"
+        )
+        pdf.add_chart(btc_chart, "Bitcoin price trajectory during simulation", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: MONETARY DISTORTION
+        # ===========================================
+        pdf.add_section("Monetary Distortion Analysis")
+        pdf.add_paragraph(
+            "The relationship between money supply and credit expansion reveals the extent of "
+            "fractional reserve banking's multiplication effect. Credit created beyond actual "
+            "savings represents potential malinvestment waiting to be liquidated."
+        )
+
+        # Money supply vs credit
+        if money_supply and credit_expansion:
+            money_chart = self.chart_generator.create_money_supply_chart(
+                money_supply, credit_expansion, "Money Supply & Credit Expansion"
+            )
+            pdf.add_chart(money_chart, "Base money and credit expansion over simulation period", figure_num=self._next_figure())
+
+        # Inflation chart
+        if inflation_rates:
+            inflation_chart = self.chart_generator.create_inflation_chart(
+                inflation_rates, f"Inflation Rate ({country})"
+            )
+            pdf.add_chart(inflation_chart, "Annualized inflation rate showing price distortion", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: INTERVENTION DAMAGE
+        # ===========================================
+        pdf.add_section("Intervention Damage Visualization")
+        pdf.add_paragraph(
+            "The following charts visualize the cumulative damage caused by central bank and "
+            "government intervention. This damage represents real wealth destroyed through "
+            "misallocation, deadweight loss, and malinvestment."
+        )
+
+        # Damage stacked area
+        if cb_damage and gov_damage:
+            damage_chart = self.chart_generator.create_damage_chart(
+                [Decimal(str(d)) for d in cb_damage],
+                [Decimal(str(d)) for d in gov_damage],
+                "Cumulative Intervention Damage"
+            )
+            pdf.add_chart(damage_chart, "Stacked area showing CB and Government damage accumulation", figure_num=self._next_figure())
+
+        # Damage donut
+        final_cb = cb_damage[-1] if cb_damage else 0
+        final_gov = gov_damage[-1] if gov_damage else 0
+        if final_cb > 0 or final_gov > 0:
+            donut = self.chart_generator.create_damage_breakdown_donut(
+                final_cb, final_gov, "Damage Distribution"
+            )
+            pdf.add_chart(donut, "Proportion of damage caused by Central Bank vs Government", width=10, height=10, figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: LABOR MARKET
+        # ===========================================
+        pdf.add_section("Labor Market Dynamics")
+        pdf.add_paragraph(
+            "Unemployment in Austrian theory results from intervention - minimum wages, regulations, "
+            "and taxation prevent labor markets from clearing. The 'natural' unemployment rate in a "
+            "free market would be minimal, representing only voluntary job transitions."
+        )
+
+        if unemployment_rates:
+            unemployment_chart = self.chart_generator.create_unemployment_chart(
+                unemployment_rates, f"Unemployment Rate ({country})"
+            )
+            pdf.add_chart(unemployment_chart, "Unemployment rate evolution during simulation", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: FREEDOM INDEX
+        # ===========================================
+        pdf.add_section("Economic Freedom Tracking")
+        pdf.add_paragraph(
+            "The Economic Freedom Index measures the degree to which voluntary exchange is permitted. "
+            "Higher values indicate less intervention. Austrian theory predicts that freedom correlates "
+            "positively with prosperity and negatively with malinvestment."
+        )
+
+        if freedom_indices:
+            freedom_chart = self.chart_generator.create_freedom_index_chart(
+                freedom_indices, f"Freedom Index ({country})"
+            )
+            pdf.add_chart(freedom_chart, "Economic freedom index evolution", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: DISTRIBUTION ANALYSIS
+        # ===========================================
+        pdf.add_section("Distribution Analysis")
+        pdf.add_paragraph(
+            "The following histogram shows the distribution of key metrics across the simulation "
+            "period, revealing central tendencies and variance in economic outcomes."
+        )
+
+        # Inflation distribution histogram
+        if inflation_rates:
+            inflation_pct = [r * 100 if r < 1 else r for r in inflation_rates]
+            if len(inflation_pct) >= 3:
+                histogram = self.chart_generator.create_histogram(
+                    inflation_pct, "Inflation Rate Distribution", "Inflation (%)", bins=min(10, len(inflation_pct))
+                )
+                pdf.add_chart(histogram, "Histogram of inflation rates during simulation", figure_num=self._next_figure())
+
     # ===========================================
     # HELPER METHODS - MULTI-COUNTRY SECTIONS
     # ===========================================
@@ -656,41 +858,264 @@ class ReportGenerator:
         history: List[Any],
         summary: Dict[str, Any]
     ):
-        """Add evolution charts for multi-country report"""
-        pdf.add_section("Comparative Evolution")
+        """Add comprehensive visualization section for multi-country report"""
+        countries = summary.get('config', {}).get('countries', [])
+        country_data = summary.get('countries', {})
+        war_risks = summary.get('war_risks', [])
+        global_metrics = summary.get('global_metrics', {})
 
+        # ===========================================
+        # SECTION: ECONOMIC PROFILE RADAR
+        # ===========================================
+        pdf.add_section("Economic Profiles")
         pdf.add_paragraph(
-            "The following charts show how key indicators evolved over time for each country, "
-            "allowing visual comparison of economic trajectories."
+            "The radar chart below provides a multi-dimensional view of each country's "
+            "economic profile, allowing comparison across multiple metrics simultaneously."
         )
 
-        countries = summary.get('config', {}).get('countries', [])
+        # Build radar data
+        radar_metrics = ['freedom_index', 'gdp', 'unemployment', 'inflation']
+        radar_data = {}
+        for country in countries[:6]:  # Limit to 6 for readability
+            if country in country_data:
+                data = country_data[country]
+                radar_data[country] = {
+                    'freedom_index': data.get('freedom_index', 50),
+                    'gdp': float(data.get('gdp', 0)) / 1e9,  # Normalize to billions
+                    'unemployment': data.get('unemployment', 0) * 100 if data.get('unemployment', 0) < 1 else data.get('unemployment', 0),
+                    'inflation': data.get('inflation', 0) * 100 if data.get('inflation', 0) < 1 else data.get('inflation', 0),
+                }
 
-        # Extract data by country
-        freedom_data = {}
-        inflation_data = {}
-
-        for metric in history:
-            for country in countries:
-                country_metric = metric.country_metrics.get(country)
-                if country_metric:
-                    if country not in freedom_data:
-                        freedom_data[country] = []
-                        inflation_data[country] = []
-                    freedom_data[country].append(country_metric.freedom_index)
-                    inflation_data[country].append(country_metric.inflation_rate)
-
-        if freedom_data:
-            freedom_chart = self.chart_generator.create_multi_country_evolution_chart(
-                freedom_data, "Freedom Index", "Economic Freedom by Country"
+        if radar_data:
+            radar_chart = self.chart_generator.create_radar_chart(
+                radar_data, radar_metrics, "Multi-Dimensional Economic Profile"
             )
-            pdf.add_chart(freedom_chart, "Freedom index evolution by country", figure_num=self._next_figure())
+            pdf.add_chart(radar_chart, "Radar chart comparing country profiles across key metrics", width=14, height=12, figure_num=self._next_figure())
 
-        if inflation_data:
-            inflation_chart = self.chart_generator.create_multi_country_evolution_chart(
-                inflation_data, "Inflation Rate", "Inflation Rate by Country"
+        # ===========================================
+        # SECTION: BUBBLE CHART - FREEDOM VS INFLATION
+        # ===========================================
+        pdf.add_section("Freedom-Inflation Analysis")
+        pdf.add_paragraph(
+            "The bubble chart below plots each country by economic freedom (x-axis) and inflation "
+            "rate (y-axis), with bubble size representing GDP. Austrian theory predicts that "
+            "countries with higher freedom will cluster in the lower-right quadrant (free & stable)."
+        )
+
+        bubble_data = {}
+        for country in countries:
+            if country in country_data:
+                data = country_data[country]
+                bubble_data[country] = {
+                    'freedom_index': data.get('freedom_index', 50),
+                    'inflation': data.get('inflation', 0),
+                    'gdp': float(data.get('gdp', 1e9)),
+                }
+
+        if bubble_data:
+            bubble_chart = self.chart_generator.create_bubble_chart(
+                bubble_data, 'freedom_index', 'inflation', 'gdp',
+                "Freedom vs Inflation (Bubble Size = GDP)"
             )
-            pdf.add_chart(inflation_chart, "Inflation rate evolution by country", figure_num=self._next_figure())
+            pdf.add_chart(bubble_chart, "Bubble chart: Freedom (x) vs Inflation (y), size = GDP", width=14, height=10, figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: COUNTRY RANKINGS
+        # ===========================================
+        pdf.add_section("Country Rankings")
+
+        # Freedom Index Ranking Bar Chart
+        pdf.add_subsection("Freedom Index Ranking")
+        freedom_rankings = {c: country_data[c].get('freedom_index', 0) for c in countries if c in country_data}
+        if freedom_rankings:
+            freedom_bar = self.chart_generator.create_ranking_horizontal_bar(
+                freedom_rankings, "Economic Freedom Index by Country", "Freedom Index (0-100)"
+            )
+            pdf.add_chart(freedom_bar, "Countries ranked by economic freedom index", figure_num=self._next_figure())
+
+        # Inflation Ranking (inverted - lower is better)
+        pdf.add_subsection("Inflation Ranking")
+        inflation_rankings = {c: country_data[c].get('inflation', 0) * 100 if country_data[c].get('inflation', 0) < 1 else country_data[c].get('inflation', 0) for c in countries if c in country_data}
+        if inflation_rankings:
+            inflation_bar = self.chart_generator.create_ranking_horizontal_bar(
+                inflation_rankings, "Inflation Rate by Country", "Inflation (%)", highlight_best=False
+            )
+            pdf.add_chart(inflation_bar, "Countries ranked by inflation rate (lower is better)", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: INTERVENTION DAMAGE ANALYSIS
+        # ===========================================
+        pdf.add_section("Intervention Damage Breakdown")
+        pdf.add_paragraph(
+            "The following visualizations show how intervention damage is distributed "
+            "between central banks and governments globally."
+        )
+
+        # Global damage donut
+        total_cb = float(global_metrics.get('total_cb_damage', 0))
+        total_gov = float(global_metrics.get('total_gov_damage', 0))
+
+        if total_cb > 0 or total_gov > 0:
+            damage_donut = self.chart_generator.create_damage_breakdown_donut(
+                total_cb, total_gov, "Global Intervention Damage Distribution"
+            )
+            pdf.add_chart(damage_donut, "Donut chart showing CB vs Government damage breakdown", width=10, height=10, figure_num=self._next_figure())
+
+        # Damage by country
+        pdf.add_subsection("Damage by Country")
+        damage_by_country = {}
+        for country in countries:
+            if country in country_data:
+                data = country_data[country]
+                cb_dmg = float(data.get('cb_damage', 0))
+                gov_dmg = float(data.get('gov_damage', 0))
+                damage_by_country[country] = cb_dmg + gov_dmg
+
+        if damage_by_country and any(v > 0 for v in damage_by_country.values()):
+            damage_rankings = self.chart_generator.create_ranking_horizontal_bar(
+                damage_by_country, "Total Intervention Damage by Country", "Damage (USD)", highlight_best=False
+            )
+            pdf.add_chart(damage_rankings, "Countries ranked by total intervention damage", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: WAR PROBABILITY MATRIX
+        # ===========================================
+        if war_risks and len(countries) >= 2:
+            pdf.add_section("War Probability Analysis")
+            pdf.add_paragraph(
+                "The heatmap below shows bilateral war probabilities between country pairs. "
+                "Darker colors indicate higher conflict risk. Austrian economics predicts that "
+                "countries with strong trade ties have lower war probabilities."
+            )
+
+            war_heatmap = self.chart_generator.create_war_probability_heatmap(
+                war_risks, countries, "Bilateral War Probability Matrix"
+            )
+            pdf.add_chart(war_heatmap, "Heatmap of war probabilities between country pairs", width=12, height=10, figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: REGIME COMPARISON
+        # ===========================================
+        pdf.add_section("Regime Type Analysis")
+        pdf.add_paragraph(
+            "The following chart compares economic outcomes grouped by political regime type, "
+            "testing Hoppe's thesis that less interventionist regimes produce better outcomes."
+        )
+
+        regime_data = {}
+        for country in countries:
+            if country in country_data:
+                data = country_data[country]
+                regime_data[country] = {
+                    'regime': data.get('regime', 'unknown'),
+                    'freedom_index': data.get('freedom_index', 50),
+                    'inflation': data.get('inflation', 0),
+                    'unemployment': data.get('unemployment', 0),
+                }
+
+        if regime_data:
+            regime_chart = self.chart_generator.create_regime_comparison_chart(
+                regime_data, "Economic Outcomes by Regime Type"
+            )
+            pdf.add_chart(regime_chart, "Comparison of key metrics by political regime type", width=16, height=8, figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: GROUPED METRICS COMPARISON
+        # ===========================================
+        pdf.add_section("Multi-Metric Comparison")
+        pdf.add_paragraph(
+            "The grouped bar chart below allows direct comparison of multiple metrics "
+            "across all countries simultaneously."
+        )
+
+        grouped_data = {}
+        for country in countries[:8]:  # Limit for readability
+            if country in country_data:
+                data = country_data[country]
+                grouped_data[country] = {
+                    'freedom_index': data.get('freedom_index', 50),
+                    'inflation': data.get('inflation', 0),
+                    'unemployment': data.get('unemployment', 0),
+                }
+
+        if grouped_data:
+            grouped_chart = self.chart_generator.create_grouped_bar_chart(
+                grouped_data, ['freedom_index', 'inflation', 'unemployment'],
+                "Key Metrics by Country"
+            )
+            pdf.add_chart(grouped_chart, "Grouped bar chart comparing Freedom, Inflation, and Unemployment", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: SCATTER CORRELATION
+        # ===========================================
+        pdf.add_section("Correlation Analysis")
+        pdf.add_paragraph(
+            "The scatter plot below shows the relationship between economic freedom and "
+            "inflation rate. The trend line indicates the correlation direction. Austrian "
+            "theory predicts a negative correlation: more freedom leads to lower inflation."
+        )
+
+        scatter_data = {}
+        for country in countries:
+            if country in country_data:
+                data = country_data[country]
+                scatter_data[country] = {
+                    'freedom_index': data.get('freedom_index', 50),
+                    'inflation': data.get('inflation', 0),
+                }
+
+        if scatter_data:
+            scatter_chart = self.chart_generator.create_scatter_correlation(
+                scatter_data, 'freedom_index', 'inflation',
+                title="Freedom Index vs Inflation Rate Correlation"
+            )
+            pdf.add_chart(scatter_chart, "Scatter plot with trend line: Freedom vs Inflation", figure_num=self._next_figure())
+
+        # ===========================================
+        # SECTION: TIME SERIES EVOLUTION
+        # ===========================================
+        if history:
+            pdf.add_section("Time Series Evolution")
+            pdf.add_paragraph(
+                "The following charts show how key indicators evolved over the simulation period "
+                "for each country."
+            )
+
+            # Extract data by country over time
+            freedom_data = {}
+            inflation_data = {}
+            damage_data = {}
+
+            for metric in history:
+                for country in countries:
+                    country_metric = metric.country_metrics.get(country)
+                    if country_metric:
+                        if country not in freedom_data:
+                            freedom_data[country] = []
+                            inflation_data[country] = []
+                            damage_data[country] = []
+                        freedom_data[country].append(country_metric.freedom_index)
+                        inflation_data[country].append(country_metric.inflation_rate * 100 if country_metric.inflation_rate < 1 else country_metric.inflation_rate)
+                        damage_data[country].append(float(country_metric.central_bank_damage) + float(country_metric.government_damage))
+
+            if freedom_data:
+                freedom_chart = self.chart_generator.create_multi_country_evolution_chart(
+                    freedom_data, "Freedom Index", "Economic Freedom Evolution by Country"
+                )
+                pdf.add_chart(freedom_chart, "Freedom index evolution over simulation period", figure_num=self._next_figure())
+
+            if inflation_data:
+                inflation_chart = self.chart_generator.create_multi_country_evolution_chart(
+                    inflation_data, "Inflation Rate (%)", "Inflation Rate Evolution by Country"
+                )
+                pdf.add_chart(inflation_chart, "Inflation rate evolution over simulation period", figure_num=self._next_figure())
+
+            # Stacked area for cumulative damage
+            if damage_data and any(d[-1] > 0 for d in damage_data.values() if d):
+                stacked_chart = self.chart_generator.create_stacked_area_evolution(
+                    damage_data, "Cumulative Damage", "Cumulative Intervention Damage by Country"
+                )
+                pdf.add_chart(stacked_chart, "Stacked area showing cumulative damage over time", figure_num=self._next_figure())
 
 
 # ===========================================
